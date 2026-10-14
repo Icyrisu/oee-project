@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=480, height=320, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="description" content="OEE Monitoring HMI 480x320 — dashboard real-time OEE dua line produksi, laporan sesi produksi, dan pengaturan target untuk layar sentuh Raspberry Pi.">
+  <meta name="theme-color" content="#000000">
+  <title>OEE Monitoring — HMI 480×320</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+
+  <!-- ===== SVG Icon Sprite (inline, tanpa request tambahan) ===== -->
+  <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <rect x="3" y="3" width="7.5" height="7.5" rx="2"/>
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/>
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/>
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>
+    </symbol>
+    <symbol id="i-report" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2.5H6.5a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2.5V8h5.5"/>
+      <path d="M8.5 18v-3M12 18v-5.5M15.5 18v-2"/>
+    </symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M3 6h3.5M11.5 6H21"/>
+      <circle cx="9" cy="6" r="2.5"/>
+      <path d="M3 12h10M18 12h3"/>
+      <circle cx="15.5" cy="12" r="2.5"/>
+      <path d="M3 18h1.5M9.5 18H21"/>
+      <circle cx="7" cy="18" r="2.5"/>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+      <circle cx="10.5" cy="10.5" r="6.5"/>
+      <path d="M20 20l-4.6-4.6"/>
+    </symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/>
+      <path d="M13.5 6.5l4 4"/>
+    </symbol>
+    <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+      <path d="M6 6l12 12M18 6L6 18"/>
+    </symbol>
+  </svg>
+
+  <main class="app" id="app">
+    <h1 class="sr-only">OEE Monitoring HMI</h1>
+
+    <div class="content" id="content">
+
+      <!-- ================= LAYAR 1: DASHBOARD ================= -->
+      <section class="screen active" id="screen-dashboard" data-screen="dashboard" aria-labelledby="title-dashboard">
+        <header class="screen-header">
+          <h2 class="title" id="title-dashboard"><b>OEE</b> <i>Monitoring</i></h2>
+          <div class="header-actions">
+            <button type="button" class="pill pill-blue" id="btn-session-toggle">START</button>
+            <span class="pill pill-red" id="badge-connection" role="status">OFFLINE</span>
+          </div>
+        </header>
+
+        <div class="dash-grid">
+          <!-- Line 1 -->
+          <article class="line-col" aria-label="Line 1">
+            <div class="status-card is-idle" id="card-status-1">
+              <p class="status-text" id="status-text-1">Idle - --.- °C</p>
+              <p class="oee-value" id="oee-value-1">0.0%</p>
+              <div class="progress"><div class="progress-fill" id="progress-1"></div></div>
+            </div>
+            <div class="count-card">
+              <span class="count-label">Good Product</span>
+              <span class="count-value text-blue"><span id="good-1">-/-</span> <small>pcs</small></span>
+            </div>
+            <div class="count-card">
+              <span class="count-label">Reject Product</span>
+              <span class="count-value text-red"><span id="reject-1">-</span> <small>pcs</small></span>
+            </div>
+          </article>
+
+          <!-- Line 2 -->
+          <article class="line-col" aria-label="Line 2">
+            <div class="status-card is-idle" id="card-status-2">
+              <p class="status-text" id="status-text-2">Idle - --.- °C</p>
+              <p class="oee-value" id="oee-value-2">0.0%</p>
+              <div class="progress"><div class="progress-fill" id="progress-2"></div></div>
+            </div>
+            <div class="count-card">
+              <span class="count-label">Good Product</span>
+              <span class="count-value text-blue"><span id="good-2">-/-</span> <small>pcs</small></span>
+            </div>
+            <div class="count-card">
+              <span class="count-label">Reject Product</span>
+              <span class="count-value text-red"><span id="reject-2">-</span> <small>pcs</small></span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ================= LAYAR 2: REPORT ================= -->
+      <section class="screen" id="screen-report" data-screen="report" aria-labelledby="title-report">
+        <header class="screen-header">
+          <h2 class="title" id="title-report"><b>OEE</b> <i>Report</i></h2>
+          <button type="button" class="pill pill-blue hidden" id="btn-report-back">BACK</button>
+        </header>
+
+        <button type="button" class="session-bar" id="btn-session-select" aria-haspopup="listbox" aria-expanded="false">
+          <span class="session-bar-text" id="session-label">Select Session Data</span>
+          <svg class="icon-20"><use href="#i-search"/></svg>
+        </button>
+
+        <div class="report-actions" id="report-actions">
+          <button type="button" class="btn-blue" id="btn-detail">Detail Data</button>
+          <button type="button" class="btn-blue" id="btn-export">Export Data</button>
+        </div>
+
+        <!-- Sub-state 6 & 7: donut summary -->
+        <div class="report-cards" id="report-summary">
+          <article class="white-card donut-card">
+            <h3 class="card-title">Line 1</h3>
+            <div class="donut">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="donut-track" cx="60" cy="60" r="48"/>
+                <circle class="donut-arc" id="donut-arc-1" cx="60" cy="60" r="48"/>
+              </svg>
+              <span class="donut-label" id="donut-label-1">0%</span>
+            </div>
+          </article>
+          <article class="white-card donut-card">
+            <h3 class="card-title">Line 2</h3>
+            <div class="donut">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="donut-track" cx="60" cy="60" r="48"/>
+                <circle class="donut-arc" id="donut-arc-2" cx="60" cy="60" r="48"/>
+              </svg>
+              <span class="donut-label" id="donut-label-2">0%</span>
+            </div>
+          </article>
+        </div>
+
+        <!-- Sub-state 8 & 9: detail data -->
+        <div class="report-detail hidden" id="report-detail">
+          <div class="detail-cards" id="detail-cards">
+            <article class="white-card detail-card" aria-label="Detail Line 1">
+              <div class="detail-row"><span class="row-label" id="d1-l0">OEE Line 1</span><span class="row-value text-blue" id="d1-v0">0.0%</span></div>
+              <div class="detail-row"><span class="row-label" id="d1-l1">Good Product</span><span class="row-value text-blue" id="d1-v1">0</span></div>
+              <div class="detail-row"><span class="row-label" id="d1-l2">Reject Product</span><span class="row-value text-red" id="d1-v2">0</span></div>
+            </article>
+            <article class="white-card detail-card" aria-label="Detail Line 2">
+              <div class="detail-row"><span class="row-label" id="d2-l0">OEE Line 2</span><span class="row-value text-blue" id="d2-v0">0.0%</span></div>
+              <div class="detail-row"><span class="row-label" id="d2-l1">Good Product</span><span class="row-value text-blue" id="d2-v1">0</span></div>
+              <div class="detail-row"><span class="row-label" id="d2-l2">Reject Product</span><span class="row-value text-red" id="d2-v2">0</span></div>
+            </article>
+          </div>
+          <div class="pager" role="tablist" aria-label="Detail page">
+            <button type="button" class="dot active" id="detail-dot-0" data-page="0" aria-label="Product data"></button>
+            <button type="button" class="dot" id="detail-dot-1" data-page="1" aria-label="Availability, Performance, Quality"></button>
+          </div>
+        </div>
+
+        <!-- Dropdown daftar sesi -->
+        <div class="session-list hidden" id="session-list" role="listbox" aria-label="Session list">
+          <div id="session-items"></div>
+        </div>
+      </section>
+
+      <!-- ================= LAYAR 3: SETTING ================= -->
+      <section class="screen" id="screen-setting" data-screen="setting" aria-labelledby="title-setting">
+        <header class="screen-header">
+          <h2 class="title" id="title-setting"><b>System</b> <i>Setting</i></h2>
+        </header>
+
+        <div class="setting-grid">
+          <div class="setting-col">
+            <h3 class="line-subtitle">Production Line 1</h3>
+            <article class="white-card setting-card">
+              <button type="button" class="setting-row editable" id="set-target-1" data-line="1" data-field="target">
+                <span class="row-label">Quantity Target</span>
+                <span class="row-value text-blue"><span id="val-target-1">-</span> pcs</span>
+                <svg class="edit-icon"><use href="#i-edit"/></svg>
+              </button>
+              <button type="button" class="setting-row editable" id="set-cycle-1" data-line="1" data-field="cycle_time">
+                <span class="row-label">Ideal Cycle Time</span>
+                <span class="row-value text-blue"><span id="val-cycle-1">-</span>s</span>
+                <svg class="edit-icon"><use href="#i-edit"/></svg>
+              </button>
+              <div class="setting-row">
+                <span class="row-label">Production Time</span>
+                <span class="row-value row-value-sm" id="val-runtime-1">0h 0m 0s</span>
+              </div>
+            </article>
+          </div>
+
+          <div class="setting-col">
+            <h3 class="line-subtitle">Production Line 2</h3>
+            <article class="white-card setting-card">
+              <button type="button" class="setting-row editable" id="set-target-2" data-line="2" data-field="target">
+                <span class="row-label">Quantity Target</span>
+                <span class="row-value text-blue"><span id="val-target-2">-</span> pcs</span>
+                <svg class="edit-icon"><use href="#i-edit"/></svg>
+              </button>
+              <button type="button" class="setting-row editable" id="set-cycle-2" data-line="2" data-field="cycle_time">
+                <span class="row-label">Ideal Cycle Time</span>
+                <span class="row-value text-blue"><span id="val-cycle-2">-</span>s</span>
+                <svg class="edit-icon"><use href="#i-edit"/></svg>
+              </button>
+              <div class="setting-row">
+                <span class="row-label">Production Time</span>
+                <span class="row-value row-value-sm" id="val-runtime-2">0h 0m 0s</span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= SIDEBAR NAVIGASI (KANAN) ================= -->
+    <nav class="sidebar" aria-label="Main navigation">
+      <button type="button" class="nav-btn active" id="nav-dashboard" data-target="dashboard" aria-label="Dashboard — OEE Monitoring" aria-current="page">
+        <svg><use href="#i-grid"/></svg>
+      </button>
+      <button type="button" class="nav-btn" id="nav-report" data-target="report" aria-label="Report — OEE Report">
+        <svg><use href="#i-report"/></svg>
+      </button>
+      <button type="button" class="nav-btn" id="nav-setting" data-target="setting" aria-label="Setting — System Setting">
+        <svg><use href="#i-sliders"/></svg>
+      </button>
+    </nav>
+
+    <!-- ================= NUMPAD MODAL ================= -->
+    <div class="overlay hidden" id="numpad-overlay" role="dialog" aria-modal="true" aria-labelledby="numpad-title">
+      <div class="numpad" id="numpad">
+        <div class="numpad-head">
+          <div class="numpad-titles">
+            <p class="numpad-sub" id="numpad-sub">Production Line 1</p>
+            <h3 class="numpad-title" id="numpad-title">Quantity Target</h3>
+          </div>
+          <output class="numpad-display" id="numpad-display">
+            <span class="numpad-value" id="numpad-value">0</span><span class="caret"></span>
+            <small class="numpad-unit" id="numpad-unit">pcs</small>
+          </output>
+        </div>
+        <div class="numpad-grid" id="numpad-grid">
+          <button type="button" class="key" id="key-1" data-key="1">1</button>
+          <button type="button" class="key" id="key-2" data-key="2">2</button>
+          <button type="button" class="key" id="key-3" data-key="3">3</button>
+          <button type="button" class="key key-clear" id="key-clear" data-key="clear">CLEAR</button>
+          <button type="button" class="key" id="key-4" data-key="4">4</button>
+          <button type="button" class="key" id="key-5" data-key="5">5</button>
+          <button type="button" class="key" id="key-6" data-key="6">6</button>
+          <button type="button" class="key key-cancel" id="key-cancel" data-key="cancel">CANCEL</button>
+          <button type="button" class="key" id="key-7" data-key="7">7</button>
+          <button type="button" class="key" id="key-8" data-key="8">8</button>
+          <button type="button" class="key" id="key-9" data-key="9">9</button>
+          <button type="button" class="key key-ok" id="key-ok" data-key="ok">OK</button>
+          <button type="button" class="key key-zero" id="key-0" data-key="0">0</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= DEV STATE SWITCHER (tersembunyi) ================= -->
+    <!-- Buka: tombol keyboard "D" atau tekan-tahan judul layar ±0.8 detik. Shortcut 1–9, 0 = state 1–10. -->
+    <div class="overlay hidden" id="dev-overlay" role="dialog" aria-modal="true" aria-labelledby="dev-title">
+      <div class="dev-panel">
+        <div class="dev-head">
+          <strong id="dev-title">DEV · State Switcher</strong>
+          <span class="dev-hint">Key 1–9, 0 · D · Esc</span>
+          <button type="button" class="dev-close" id="dev-close" aria-label="Close dev panel">
+            <svg class="icon-16"><use href="#i-close"/></svg>
+          </button>
+        </div>
+        <div class="dev-grid" id="dev-grid"></div>
+        <div class="dev-foot">
+          <button type="button" class="dev-btn dev-btn-sm" id="dev-conn">Toggle Online/Offline</button>
+          <button type="button" class="dev-btn dev-btn-sm" id="dev-line-1">L1 Status ↻</button>
+          <button type="button" class="dev-btn dev-btn-sm" id="dev-line-2">L2 Status ↻</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast notifikasi -->
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </main>
+</body>
+</html>

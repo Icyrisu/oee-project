@@ -1,2 +1,5 @@
 .agent/
 docs/
+.venv/
+__pycache__/
+*.pyc
