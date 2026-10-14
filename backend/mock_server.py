@@ -356,6 +356,7 @@ class ToggleStateBody(BaseModel):
 class SettingsBody(BaseModel):
     target: Optional[int] = Field(None, ge=1, le=9999)
     cycle_time: Optional[int] = Field(None, ge=1, le=9999)
+    run_seconds: Optional[int] = Field(None, ge=0, le=864000)
 
 
 @app.websocket("/ws")
@@ -414,13 +415,17 @@ async def get_sessions() -> dict:
 async def update_settings(line_id: int, body: SettingsBody) -> dict:
     if line_id not in STATE["lines"]:
         raise HTTPException(status_code=404, detail=f"Line {line_id} not found")
-    if body.target is None and body.cycle_time is None:
-        raise HTTPException(status_code=400, detail="Provide target or cycle_time")
+    if body.target is None and body.cycle_time is None and body.run_seconds is None:
+        raise HTTPException(status_code=400, detail="Provide target, cycle_time, or run_seconds")
     line = STATE["lines"][line_id]
     if body.target is not None:
         line["target"] = body.target
     if body.cycle_time is not None:
         line["cycle_time"] = body.cycle_time
+    if body.run_seconds is not None:
+        line["run_seconds"] = body.run_seconds
+        if STATE["session_seconds"] < body.run_seconds:
+            STATE["session_seconds"] = body.run_seconds
     snap = snapshot()
     await hub.broadcast(snap)
     return snap

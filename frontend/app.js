@@ -23,10 +23,11 @@
   const DONUT_C = 2 * Math.PI * 48;          // keliling lingkaran donut (r = 48)
   const WS_STALE_MS = 4000;                   // tanpa pesan > 4 dtk = dianggap putus
   const REFERENCE_SESSION_ID = 1;             // sesi acuan PDF (01-01-2026 07:00:00)
-  const NUMPAD_MAX_DIGITS = 4;
+  const NUMPAD_MAX_DIGITS = 5;
   const FIELD_META = {
-    target:     { title: 'Quantity Target',  unit: 'pcs' },
-    cycle_time: { title: 'Ideal Cycle Time', unit: 's' },
+    target:      { title: 'Quantity Target',  unit: 'pcs', isTime: false, min: 1, max: 9999 },
+    cycle_time:  { title: 'Ideal Cycle Time', unit: 's',   isTime: false, min: 1, max: 9999 },
+    run_seconds: { title: 'Production Time',  unit: 'min', isTime: true,  min: 0, max: 9999 },
   };
 
   // ------------------------------------------------------------------
@@ -240,7 +241,7 @@
   function renderReport() {
     const r = ui.report;
     const s = selectedSession();
-    const detail = r.view === 'detail' && !!s;
+    const detail = r.view === 'detail';
 
     setText($('session-label'), s ? s.label : 'Select Session Data');
     $('btn-report-back').classList.toggle('hidden', !detail);
@@ -397,7 +398,10 @@
     const ln = findLine(ui.live, line);
     if (!ln || !ui.wsConnected) { toast('Backend offline — cannot edit', 'error'); return; }
     const meta = FIELD_META[field];
-    ui.numpad = { line, field, value: String(ln[field] ?? ''), fresh: true };
+    if (!meta) return;
+    const rawVal = ln[field];
+    const initialVal = meta.isTime ? Math.floor((Number(rawVal) || 0) / 60) : (rawVal ?? 0);
+    ui.numpad = { line, field, value: String(initialVal), fresh: true };
     setText($('numpad-sub'), `Production Line ${line}`);
     setText($('numpad-title'), meta.title);
     setText($('numpad-unit'), meta.unit);
@@ -438,16 +442,19 @@
 
   async function submitNumpad() {
     const n = ui.numpad;
-    const value = parseInt(n.value, 10);
-    if (!value || value < 1 || value > 9999) {
-      toast('Value must be 1 – 9999', 'error');
+    if (!n) return;
+    const meta = FIELD_META[n.field];
+    const num = parseInt(n.value, 10);
+    if (isNaN(num) || num < meta.min || num > meta.max) {
+      toast(`Value must be ${meta.min} – ${meta.max}`, 'error');
       return;
     }
     const okBtn = $('key-ok');
     okBtn.disabled = true;
     try {
-      applyLive(await put(`/api/settings/${n.line}`, { [n.field]: value }));
-      toast(`${FIELD_META[n.field].title} Line ${n.line} saved`, 'success');
+      const payloadVal = meta.isTime ? num * 60 : num;
+      applyLive(await put(`/api/settings/${n.line}`, { [n.field]: payloadVal }));
+      toast(`${meta.title} Line ${n.line} saved`, 'success');
       closeNumpad();
     } catch (e) {
       toast(`Save failed: ${e.message}`, 'error');
@@ -551,7 +558,6 @@
       if (ui.report.listOpen && !e.target.closest('#session-list, #btn-session-select')) closeSessionList();
     });
     $('btn-detail').addEventListener('click', () => {
-      if (!requireSession()) return;
       ui.report.view = 'detail';
       ui.report.page = 0;
       renderReport();
@@ -566,18 +572,10 @@
     });
     $$('.pager .dot').forEach((dot) => dot.addEventListener('click', () => setDetailPage(Number(dot.dataset.page))));
 
-    // Detail: tap = ganti halaman, swipe kiri/kanan = navigasi halaman
-    let swipeX = null;
-    const cards = $('detail-cards');
-    cards.addEventListener('pointerdown', (e) => { swipeX = e.clientX; });
-    cards.addEventListener('pointerup', (e) => {
-      if (swipeX == null) return;
-      const dx = e.clientX - swipeX;
-      swipeX = null;
-      if (Math.abs(dx) < 30) setDetailPage(ui.report.page === 0 ? 1 : 0);
-      else setDetailPage(dx < 0 ? 1 : 0);
+    // Detail: tap card berganti halaman (Product <-> Avi/Per/Qu)
+    $('detail-cards').addEventListener('click', () => {
+      setDetailPage(ui.report.page === 0 ? 1 : 0);
     });
-    cards.addEventListener('pointercancel', () => { swipeX = null; });
 
     // Setting → Numpad
     $$('.setting-row.editable').forEach((row) => row.addEventListener('click', () => {
@@ -609,8 +607,11 @@
       devToggle({ line_id: id, status: next });
     }));
 
-    // Tekan-tahan judul layar ±0.8 dtk = buka dev panel (untuk layar sentuh)
+    $('dev-fullscreen').addEventListener('click', toggleFullscreen);
+
+    // Double-click judul layar = toggle fullscreen
     $$('.title').forEach((el) => {
+      el.addEventListener('dblclick', toggleFullscreen);
       let timer = null;
       const cancel = () => clearTimeout(timer);
       el.addEventListener('pointerdown', () => { timer = setTimeout(() => toggleDev(true), 800); });
@@ -628,6 +629,7 @@
         e.preventDefault();
         return;
       }
+      if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); return; }
       if (e.key === 'd' || e.key === 'D') { toggleDev(); return; }
       if (e.key === 'Escape') { toggleDev(false); closeSessionList(); return; }
       if (/^\d$/.test(e.key)) runDevState(e.key === '0' ? 10 : Number(e.key));
@@ -638,9 +640,49 @@
   }
 
   // ------------------------------------------------------------------
+  // Auto Fullscreen & Viewport Fit
+  // ------------------------------------------------------------------
+  function updateLayoutScale() {
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    if (!vw || !vh) return;
+
+    const baseAspect = 480 / 320; // 1.5
+    const windowAspect = vw / vh;
+
+    let scale, baseWidth, baseHeight;
+
+    if (windowAspect >= baseAspect) {
+      scale = vh / 320;
+      baseWidth = Math.max(480, Math.round(vw / scale));
+      baseHeight = 320;
+    } else {
+      scale = vw / 480;
+      baseWidth = 480;
+      baseHeight = Math.max(320, Math.round(vh / scale));
+    }
+
+    document.documentElement.style.setProperty('--app-scale', scale);
+    document.documentElement.style.setProperty('--app-width', `${baseWidth}px`);
+    document.documentElement.style.setProperty('--app-height', `${baseHeight}px`);
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }
+
+  // ------------------------------------------------------------------
   // Init
   // ------------------------------------------------------------------
   function init() {
+    updateLayoutScale();
+    window.addEventListener('resize', updateLayoutScale);
+    window.addEventListener('orientationchange', updateLayoutScale);
+    document.addEventListener('fullscreenchange', updateLayoutScale);
     buildDevPanel();
     bindEvents();
     renderDashboard();

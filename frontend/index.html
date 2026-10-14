@@ -187,10 +187,11 @@
                 <span class="row-value text-blue"><span id="val-cycle-1">-</span>s</span>
                 <svg class="edit-icon"><use href="#i-edit"/></svg>
               </button>
-              <div class="setting-row">
+              <button type="button" class="setting-row editable" id="set-runtime-1" data-line="1" data-field="run_seconds">
                 <span class="row-label">Production Time</span>
-                <span class="row-value row-value-sm" id="val-runtime-1">0h 0m 0s</span>
-              </div>
+                <span class="row-value row-value-sm text-blue"><span id="val-runtime-1">0h 0m 0s</span></span>
+                <svg class="edit-icon"><use href="#i-edit"/></svg>
+              </button>
             </article>
           </div>
 
@@ -207,10 +208,11 @@
                 <span class="row-value text-blue"><span id="val-cycle-2">-</span>s</span>
                 <svg class="edit-icon"><use href="#i-edit"/></svg>
               </button>
-              <div class="setting-row">
+              <button type="button" class="setting-row editable" id="set-runtime-2" data-line="2" data-field="run_seconds">
                 <span class="row-label">Production Time</span>
-                <span class="row-value row-value-sm" id="val-runtime-2">0h 0m 0s</span>
-              </div>
+                <span class="row-value row-value-sm text-blue"><span id="val-runtime-2">0h 0m 0s</span></span>
+                <svg class="edit-icon"><use href="#i-edit"/></svg>
+              </button>
             </article>
           </div>
         </div>
@@ -274,9 +276,10 @@
         </div>
         <div class="dev-grid" id="dev-grid"></div>
         <div class="dev-foot">
-          <button type="button" class="dev-btn dev-btn-sm" id="dev-conn">Toggle Online/Offline</button>
-          <button type="button" class="dev-btn dev-btn-sm" id="dev-line-1">L1 Status ↻</button>
-          <button type="button" class="dev-btn dev-btn-sm" id="dev-line-2">L2 Status ↻</button>
+          <button type="button" class="dev-btn dev-btn-sm" id="dev-fullscreen">Fullscreen (F)</button>
+          <button type="button" class="dev-btn dev-btn-sm" id="dev-conn">Online/Offline</button>
+          <button type="button" class="dev-btn dev-btn-sm" id="dev-line-1">L1 ↻</button>
+          <button type="button" class="dev-btn dev-btn-sm" id="dev-line-2">L2 ↻</button>
         </div>
       </div>
     </div>
