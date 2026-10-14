@@ -395,12 +395,22 @@
   // Numpad Modal
   // ------------------------------------------------------------------
   function openNumpad(line, field) {
-    const ln = findLine(ui.live, line);
-    if (!ln || !ui.wsConnected) { toast('Backend offline — cannot edit', 'error'); return; }
     const meta = FIELD_META[field];
     if (!meta) return;
-    const rawVal = ln[field];
-    const initialVal = meta.isTime ? Math.floor((Number(rawVal) || 0) / 60) : (rawVal ?? 0);
+    const ln = findLine(ui.live, line);
+    let rawVal = ln ? ln[field] : undefined;
+    if (rawVal === undefined) {
+      if (field === 'target') {
+        const txt = $(`val-target-${line}`)?.textContent;
+        rawVal = parseInt(txt, 10) || 10;
+      } else if (field === 'cycle_time') {
+        const txt = $(`val-cycle-${line}`)?.textContent;
+        rawVal = parseInt(txt, 10) || 60;
+      } else {
+        rawVal = 0;
+      }
+    }
+    const initialVal = meta.isTime ? Math.floor((Number(rawVal) || 0) / 60) : (Number(rawVal) || 0);
     ui.numpad = { line, field, value: String(initialVal), fresh: true };
     setText($('numpad-sub'), `Production Line ${line}`);
     setText($('numpad-title'), meta.title);
@@ -434,7 +444,7 @@
       n.value = n.fresh ? '' : n.value.slice(0, -1); n.fresh = false;
     } else if (key === 'cancel') {
       closeNumpad(); return;
-    } else if (key === 'ok') {
+    } else if (key === 'save' || key === 'ok') {
       submitNumpad(); return;
     }
     renderNumpad();
@@ -446,20 +456,24 @@
     const meta = FIELD_META[n.field];
     const num = parseInt(n.value, 10);
     if (isNaN(num) || num < meta.min || num > meta.max) {
-      toast(`Value must be ${meta.min} – ${meta.max}`, 'error');
+      toast(`Nilai harus antara ${meta.min} – ${meta.max}`, 'error');
       return;
     }
-    const okBtn = $('key-ok');
-    okBtn.disabled = true;
+    if (!ui.wsConnected) {
+      toast('Backend offline — data tidak dapat disimpan', 'error');
+      return;
+    }
+    const saveBtn = $('key-save') || $('key-ok');
+    if (saveBtn) saveBtn.disabled = true;
     try {
       const payloadVal = meta.isTime ? num * 60 : num;
       applyLive(await put(`/api/settings/${n.line}`, { [n.field]: payloadVal }));
-      toast(`${meta.title} Line ${n.line} saved`, 'success');
+      toast(`${meta.title} Line ${n.line} tersimpan`, 'success');
       closeNumpad();
     } catch (e) {
-      toast(`Save failed: ${e.message}`, 'error');
+      toast(`Gagal menyimpan: ${e.message}`, 'error');
     } finally {
-      okBtn.disabled = false;
+      if (saveBtn) saveBtn.disabled = false;
     }
   }
 
@@ -622,7 +636,7 @@
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (ui.numpad) {
-        const map = { Enter: 'ok', Escape: 'cancel', Backspace: 'back', Delete: 'clear' };
+        const map = { Enter: 'save', Escape: 'cancel', Backspace: 'back', Delete: 'clear' };
         if (/^\d$/.test(e.key)) numpadKey(e.key);
         else if (map[e.key]) numpadKey(map[e.key]);
         else return;
