@@ -27,7 +27,7 @@
   const FIELD_META = {
     target:      { title: 'Quantity Target',  unit: 'pcs', isTime: false, min: 1, max: 9999 },
     cycle_time:  { title: 'Ideal Cycle Time', unit: 's',   isTime: false, min: 1, max: 9999 },
-    run_seconds: { title: 'Production Time',  unit: 'min', isTime: true,  min: 0, max: 9999 },
+    run_seconds: { title: 'Production Time',  unit: 's',   isTime: true,  min: 0, max: 864000 },
   };
 
   // ------------------------------------------------------------------
@@ -394,6 +394,15 @@
   // ------------------------------------------------------------------
   // Numpad Modal
   // ------------------------------------------------------------------
+  function parseDurationSec(txt) {
+    if (!txt) return 0;
+    const m = String(txt).match(/(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*s/i);
+    if (m) {
+      return (parseInt(m[1], 10) * 3600) + (parseInt(m[2], 10) * 60) + parseInt(m[3], 10);
+    }
+    return 0;
+  }
+
   function openNumpad(line, field) {
     const meta = FIELD_META[field];
     if (!meta) return;
@@ -406,12 +415,37 @@
       } else if (field === 'cycle_time') {
         const txt = $(`val-cycle-${line}`)?.textContent;
         rawVal = parseInt(txt, 10) || 60;
+      } else if (field === 'run_seconds') {
+        const txt = $(`val-runtime-${line}`)?.textContent;
+        rawVal = parseDurationSec(txt);
       } else {
         rawVal = 0;
       }
     }
-    const initialVal = meta.isTime ? Math.floor((Number(rawVal) || 0) / 60) : (Number(rawVal) || 0);
-    ui.numpad = { line, field, value: String(initialVal), fresh: true };
+
+    if (meta.isTime) {
+      const totalSec = Number(rawVal) || 0;
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      ui.numpad = {
+        line,
+        field,
+        isTime: true,
+        activeSeg: 'h',
+        time: { h: String(h), m: String(m), s: String(s) },
+        fresh: true,
+      };
+    } else {
+      ui.numpad = {
+        line,
+        field,
+        isTime: false,
+        value: String(Number(rawVal) || 0),
+        fresh: true,
+      };
+    }
+
     setText($('numpad-sub'), `Production Line ${line}`);
     setText($('numpad-title'), meta.title);
     setText($('numpad-unit'), meta.unit);
@@ -426,26 +460,88 @@
 
   function renderNumpad() {
     const n = ui.numpad;
-    const el = $('numpad-value');
-    setText(el, n.value || '0');
-    el.classList.toggle('fresh', n.fresh || !n.value);
+    if (!n) return;
+    if (!n.isTime) {
+      $('numpad-display').classList.remove('hidden');
+      $('numpad-time-display').classList.add('hidden');
+      const el = $('numpad-value');
+      setText(el, n.value || '0');
+      el.classList.toggle('fresh', n.fresh || !n.value);
+    } else {
+      $('numpad-display').classList.add('hidden');
+      $('numpad-time-display').classList.remove('hidden');
+      ['h', 'm', 's'].forEach((seg) => {
+        const btn = $(`seg-${seg}`);
+        const valEl = $(`seg-val-${seg}`);
+        setText(valEl, n.time[seg] || '0');
+        const isActive = n.activeSeg === seg;
+        btn.classList.toggle('active', isActive);
+        btn.classList.toggle('fresh', isActive && n.fresh);
+      });
+    }
   }
 
   function numpadKey(key) {
     const n = ui.numpad;
     if (!n) return;
-    if (/^\d$/.test(key)) {
-      if (n.fresh) { n.value = ''; n.fresh = false; }   // ketikan pertama menimpa nilai lama
-      if (n.value.length >= NUMPAD_MAX_DIGITS) { return; }
-      n.value = n.value === '0' ? key : n.value + key;
-    } else if (key === 'clear') {
-      n.value = ''; n.fresh = false;
-    } else if (key === 'back') {
-      n.value = n.fresh ? '' : n.value.slice(0, -1); n.fresh = false;
-    } else if (key === 'cancel') {
-      closeNumpad(); return;
-    } else if (key === 'save' || key === 'ok') {
-      submitNumpad(); return;
+
+    if (key === 'cancel') {
+      closeNumpad();
+      return;
+    }
+    if (key === 'save' || key === 'ok') {
+      submitNumpad();
+      return;
+    }
+
+    if (!n.isTime) {
+      if (/^\d$/.test(key)) {
+        if (n.fresh) { n.value = ''; n.fresh = false; }
+        if (n.value.length >= NUMPAD_MAX_DIGITS) { return; }
+        n.value = n.value === '0' ? key : n.value + key;
+      } else if (key === 'clear') {
+        n.value = '0';
+        n.fresh = true;
+      } else if (key === 'delete' || key === 'back') {
+        if (n.fresh) {
+          n.value = '0';
+        } else {
+          n.value = n.value.slice(0, -1);
+          if (!n.value) n.value = '0';
+        }
+        n.fresh = false;
+      }
+    } else {
+      const seg = n.activeSeg;
+      const maxDigits = seg === 'h' ? 3 : 2;
+      if (/^\d$/.test(key)) {
+        let cur = n.fresh ? '' : n.time[seg];
+        if (cur === '0') cur = '';
+        if (cur.length < maxDigits) {
+          let next = cur + key;
+          if (seg !== 'h' && parseInt(next, 10) > 59) {
+            next = '59';
+          }
+          n.time[seg] = next;
+          n.fresh = false;
+          // Auto-advance ke detik jika 2 digit menit sudah terisi
+          if (seg === 'm' && next.length === 2) {
+            n.activeSeg = 's';
+            n.fresh = true;
+          }
+        }
+      } else if (key === 'clear') {
+        n.time[seg] = '0';
+        n.fresh = true;
+      } else if (key === 'delete' || key === 'back') {
+        if (n.fresh) {
+          n.time[seg] = '0';
+        } else {
+          n.time[seg] = n.time[seg].slice(0, -1);
+          if (!n.time[seg]) n.time[seg] = '0';
+        }
+        n.fresh = false;
+      }
     }
     renderNumpad();
   }
@@ -454,11 +550,30 @@
     const n = ui.numpad;
     if (!n) return;
     const meta = FIELD_META[n.field];
-    const num = parseInt(n.value, 10);
-    if (isNaN(num) || num < meta.min || num > meta.max) {
-      toast(`Nilai harus antara ${meta.min} – ${meta.max}`, 'error');
-      return;
+
+    let payloadVal;
+    if (!n.isTime) {
+      const num = parseInt(n.value, 10);
+      if (isNaN(num) || num < meta.min || num > meta.max) {
+        toast(`Nilai harus antara ${meta.min} – ${meta.max}`, 'error');
+        return;
+      }
+      payloadVal = num;
+    } else {
+      const h = parseInt(n.time.h, 10) || 0;
+      const m = parseInt(n.time.m, 10) || 0;
+      const s = parseInt(n.time.s, 10) || 0;
+      if (h < 0 || h > 240 || m < 0 || m > 59 || s < 0 || s > 59) {
+        toast('Format waktu tidak valid (m dan s maksimal 59)', 'error');
+        return;
+      }
+      payloadVal = (h * 3600) + (m * 60) + s;
+      if (payloadVal < meta.min || payloadVal > meta.max) {
+        toast(`Total waktu harus antara ${meta.min} – ${meta.max} detik`, 'error');
+        return;
+      }
     }
+
     if (!ui.wsConnected) {
       toast('Backend offline — data tidak dapat disimpan', 'error');
       return;
@@ -466,7 +581,6 @@
     const saveBtn = $('key-save') || $('key-ok');
     if (saveBtn) saveBtn.disabled = true;
     try {
-      const payloadVal = meta.isTime ? num * 60 : num;
       applyLive(await put(`/api/settings/${n.line}`, { [n.field]: payloadVal }));
       toast(`${meta.title} Line ${n.line} tersimpan`, 'success');
       closeNumpad();
@@ -595,6 +709,15 @@
     $$('.setting-row.editable').forEach((row) => row.addEventListener('click', () => {
       openNumpad(Number(row.dataset.line), row.dataset.field);
     }));
+    ['h', 'm', 's'].forEach((seg) => {
+      $(`seg-${seg}`).addEventListener('click', () => {
+        if (ui.numpad && ui.numpad.isTime) {
+          ui.numpad.activeSeg = seg;
+          ui.numpad.fresh = true;
+          renderNumpad();
+        }
+      });
+    });
     $('numpad-grid').addEventListener('click', (e) => {
       const key = e.target.closest('.key');
       if (key && !key.disabled) numpadKey(key.dataset.key);
@@ -636,10 +759,20 @@
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (ui.numpad) {
-        const map = { Enter: 'save', Escape: 'cancel', Backspace: 'back', Delete: 'clear' };
+        const map = { Enter: 'save', Escape: 'cancel', Backspace: 'delete', Delete: 'delete' };
         if (/^\d$/.test(e.key)) numpadKey(e.key);
         else if (map[e.key]) numpadKey(map[e.key]);
-        else return;
+        else if (ui.numpad.isTime && (e.key === 'Tab' || e.key === 'ArrowRight')) {
+          const order = ['h', 'm', 's'];
+          ui.numpad.activeSeg = order[(order.indexOf(ui.numpad.activeSeg) + 1) % 3];
+          ui.numpad.fresh = true;
+          renderNumpad();
+        } else if (ui.numpad.isTime && e.key === 'ArrowLeft') {
+          const order = ['h', 'm', 's'];
+          ui.numpad.activeSeg = order[(order.indexOf(ui.numpad.activeSeg) + 2) % 3];
+          ui.numpad.fresh = true;
+          renderNumpad();
+        } else return;
         e.preventDefault();
         return;
       }

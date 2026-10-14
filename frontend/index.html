@@ -244,6 +244,19 @@
             <span class="numpad-value" id="numpad-value">0</span><span class="caret"></span>
             <small class="numpad-unit" id="numpad-unit">pcs</small>
           </output>
+          <div class="numpad-time-display hidden" id="numpad-time-display">
+            <button type="button" class="time-seg active" id="seg-h" data-seg="h" aria-label="Hours">
+              <span class="seg-val" id="seg-val-h">0</span><small class="seg-unit">h</small>
+            </button>
+            <span class="time-colon">:</span>
+            <button type="button" class="time-seg" id="seg-m" data-seg="m" aria-label="Minutes">
+              <span class="seg-val" id="seg-val-m">00</span><small class="seg-unit">m</small>
+            </button>
+            <span class="time-colon">:</span>
+            <button type="button" class="time-seg" id="seg-s" data-seg="s" aria-label="Seconds">
+              <span class="seg-val" id="seg-val-s">00</span><small class="seg-unit">s</small>
+            </button>
+          </div>
         </div>
         <div class="numpad-grid" id="numpad-grid">
           <button type="button" class="key" id="key-1" data-key="1">1</button>
@@ -253,12 +266,13 @@
           <button type="button" class="key" id="key-4" data-key="4">4</button>
           <button type="button" class="key" id="key-5" data-key="5">5</button>
           <button type="button" class="key" id="key-6" data-key="6">6</button>
-          <button type="button" class="key key-cancel" id="key-cancel" data-key="cancel">CANCEL</button>
+          <button type="button" class="key key-delete" id="key-delete" data-key="delete">DELETE</button>
           <button type="button" class="key" id="key-7" data-key="7">7</button>
           <button type="button" class="key" id="key-8" data-key="8">8</button>
           <button type="button" class="key" id="key-9" data-key="9">9</button>
-          <button type="button" class="key key-save" id="key-save" data-key="save">SAVE</button>
+          <button type="button" class="key key-cancel" id="key-cancel" data-key="cancel">CANCEL</button>
           <button type="button" class="key key-zero" id="key-0" data-key="0">0</button>
+          <button type="button" class="key key-save" id="key-save" data-key="save">SAVE</button>
         </div>
       </div>
     </div>
