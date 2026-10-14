@@ -61,15 +61,6 @@
     if (el && el.textContent !== text) { el.textContent = text; return true; }
     return false;
   }
-  function bump(el) {
-    el.classList.remove('bump');
-    void el.offsetWidth;            // restart animasi
-    el.classList.add('bump');
-  }
-  function setTextBump(el, text) {
-    const prev = el.textContent;
-    if (setText(el, text) && prev !== '' && !prev.startsWith('-')) bump(el);
-  }
 
   let toastTimer = null;
   function toast(msg, type = '') {
@@ -206,8 +197,8 @@
       $(`progress-${id}`).style.width = `${oee}%`;
 
       const hasCount = active && line && (line.good + line.reject) > 0;
-      setTextBump($(`good-${id}`), hasCount ? `${line.good}/${line.target}` : '-/-');
-      setTextBump($(`reject-${id}`), hasCount ? String(line.reject) : '-');
+      setText($(`good-${id}`), hasCount ? `${line.good}/${line.target}` : '-/-');
+      setText($(`reject-${id}`), hasCount ? String(line.reject) : '-');
     });
   }
 
@@ -302,10 +293,6 @@
     const p = clamp(page, 0, 1);
     if (p === ui.report.page) return;
     ui.report.page = p;
-    const cards = $('detail-cards');
-    cards.classList.remove('swap');
-    void cards.offsetWidth;
-    cards.classList.add('swap');
     renderReport();
   }
 
@@ -364,10 +351,6 @@
     const s = selectedSession();
     if (s) return s;
     toast('Select a session first');
-    const bar = $('btn-session-select');
-    bar.classList.remove('attention');
-    void bar.offsetWidth;
-    bar.classList.add('attention');
     return null;
   }
 
@@ -434,19 +417,12 @@
     el.classList.toggle('fresh', n.fresh || !n.value);
   }
 
-  function shakeNumpad() {
-    const pad = $('numpad');
-    pad.classList.remove('shake');
-    void pad.offsetWidth;
-    pad.classList.add('shake');
-  }
-
   function numpadKey(key) {
     const n = ui.numpad;
     if (!n) return;
     if (/^\d$/.test(key)) {
       if (n.fresh) { n.value = ''; n.fresh = false; }   // ketikan pertama menimpa nilai lama
-      if (n.value.length >= NUMPAD_MAX_DIGITS) { shakeNumpad(); return; }
+      if (n.value.length >= NUMPAD_MAX_DIGITS) { return; }
       n.value = n.value === '0' ? key : n.value + key;
     } else if (key === 'clear') {
       n.value = ''; n.fresh = false;
@@ -464,7 +440,6 @@
     const n = ui.numpad;
     const value = parseInt(n.value, 10);
     if (!value || value < 1 || value > 9999) {
-      shakeNumpad();
       toast('Value must be 1 – 9999', 'error');
       return;
     }
@@ -472,10 +447,8 @@
     okBtn.disabled = true;
     try {
       applyLive(await put(`/api/settings/${n.line}`, { [n.field]: value }));
-      const target = $(n.field === 'target' ? `val-target-${n.line}` : `val-cycle-${n.line}`);
       toast(`${FIELD_META[n.field].title} Line ${n.line} saved`, 'success');
       closeNumpad();
-      bump(target);
     } catch (e) {
       toast(`Save failed: ${e.message}`, 'error');
     } finally {
