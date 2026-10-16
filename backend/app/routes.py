@@ -83,4 +83,24 @@ def register_routes(app, engine):
         finally:
             hub.disconnect(ws)
 
+    @router.post("/api/system/poweroff")
+    async def system_poweroff():
+        import os
+        import sys
+        import threading
+        import time
+
+        if engine.session_active:
+            engine._save_checkpoint()
+
+        def _do_shutdown():
+            time.sleep(0.8)
+            if sys.platform.startswith("linux"):
+                os.system("sudo poweroff")
+            else:
+                print("[SYSTEM] Simulated poweroff triggered")
+
+        threading.Thread(target=_do_shutdown, daemon=True).start()
+        return {"status": "ok", "message": "System is powering off"}
+
     app.include_router(router)

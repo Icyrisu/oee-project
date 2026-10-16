@@ -596,6 +596,31 @@
   }
 
   // ------------------------------------------------------------------
+  // System Power Off Modal
+  // ------------------------------------------------------------------
+  function openPowerOffConfirmation() {
+    $('poweroff-overlay').classList.remove('hidden');
+  }
+
+  function closePowerOffConfirmation() {
+    $('poweroff-overlay').classList.add('hidden');
+  }
+
+  async function executePowerOff() {
+    setText($('poweroff-title'), 'Shutting Down...');
+    setText($('poweroff-desc'), 'Closing database and turning off Raspberry Pi safely. Please wait until the green activity LED stops blinking before unplugging the power supply.');
+    $('btn-poweroff-cancel').disabled = true;
+    $('btn-poweroff-confirm').disabled = true;
+    setText($('btn-poweroff-confirm'), 'SHUTTING DOWN...');
+
+    try {
+      await api('/api/system/poweroff', { method: 'POST' });
+    } catch (_) {
+      // Normal if network drops during OS shutdown
+    }
+  }
+
+  // ------------------------------------------------------------------
   // Excel Export (.xlsx)
   // ------------------------------------------------------------------
   function exportSession(s) {
@@ -945,6 +970,14 @@
       if (e.target.id === 'delete-overlay') closeDeleteConfirmation();
     });
 
+    // Power Off Confirmation Modal
+    $('btn-open-poweroff').addEventListener('click', openPowerOffConfirmation);
+    $('btn-poweroff-cancel').addEventListener('click', closePowerOffConfirmation);
+    $('btn-poweroff-confirm').addEventListener('click', executePowerOff);
+    $('poweroff-overlay').addEventListener('pointerdown', (e) => {
+      if (e.target.id === 'poweroff-overlay') closePowerOffConfirmation();
+    });
+
     // Report
     $('btn-session-select').addEventListener('click', () => (ui.report.listOpen ? closeSessionList() : openSessionList()));
     $('session-items').addEventListener('click', (e) => {
@@ -1048,6 +1081,7 @@
       if (e.key === 'Escape') {
         closeEndConfirmation();
         closeDeleteConfirmation();
+        closePowerOffConfirmation();
         toggleDev(false);
         closeSessionList();
         return;

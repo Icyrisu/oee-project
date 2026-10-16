@@ -721,13 +721,56 @@ button.pill:disabled { opacity: .55; }
 }
 
 .info-footer {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding-top: 3px;
+  position: relative;
+  min-height: 24px;
+}
+
+.btn-poweroff {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 59, 48, .18);
+  color: var(--red);
+  border: 1px solid rgba(255, 59, 48, .4);
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color .15s ease, color .15s ease, transform .1s ease;
+  z-index: 2;
+}
+.btn-poweroff:active {
+  background: var(--red);
+  color: var(--white);
+  transform: scale(.96);
+}
+.btn-poweroff .icon-power {
+  width: 12px;
+  height: 12px;
+}
+
+.info-footer-text {
   font-size: 10px;
   font-style: italic;
   color: var(--white);
   opacity: .85;
-  padding-top: 3px;
   letter-spacing: .2px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.info-footer-spacer {
+  width: 75px;
 }
 
 .overlay {

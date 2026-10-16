@@ -57,6 +57,10 @@
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
       <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
     </symbol>
+    <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+      <line x1="12" y1="2" x2="12" y2="12"/>
+    </symbol>
   </svg>
 
   <main class="app" id="app">
@@ -338,7 +342,12 @@
           </article>
 
           <footer class="info-footer">
-            <i>Product by JAGO Otomasi</i>
+            <button type="button" class="btn-poweroff" id="btn-open-poweroff" aria-label="Power Off Raspberry Pi">
+              <svg class="icon-power"><use href="#i-power"/></svg>
+              <span>Power Off</span>
+            </button>
+            <i class="info-footer-text">Product by JAGO Otomasi</i>
+            <div class="info-footer-spacer"></div>
           </footer>
         </div>
       </section>
@@ -444,6 +453,18 @@
         <div class="recovery-actions">
           <button type="button" class="key key-save recovery-btn" id="btn-recovery-resume">RESUME SESSION</button>
           <button type="button" class="key key-clear recovery-btn" id="btn-recovery-end">END SESSION</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= POWER OFF CONFIRMATION MODAL ================= -->
+    <div class="overlay hidden" id="poweroff-overlay" role="dialog" aria-modal="true" aria-labelledby="poweroff-title">
+      <div class="confirm-card">
+        <h3 class="confirm-title" id="poweroff-title">Power Off Raspberry Pi?</h3>
+        <p class="confirm-desc" id="poweroff-desc">Are you sure you want to shut down the system? The operating system and database will be safely synchronized and closed.</p>
+        <div class="confirm-actions">
+          <button type="button" class="key key-cancel confirm-btn" id="btn-poweroff-cancel">CANCEL</button>
+          <button type="button" class="key key-clear confirm-btn" id="btn-poweroff-confirm">POWER OFF</button>
         </div>
       </div>
     </div>

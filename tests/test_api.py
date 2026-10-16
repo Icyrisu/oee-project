@@ -128,3 +128,10 @@ def test_api_network(client):
     assert "hostname" in data
     assert "lan_ip" in data
 
+
+def test_api_poweroff(client):
+    res = client.post("/api/system/poweroff")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "ok"
+
