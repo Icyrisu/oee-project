@@ -375,6 +375,36 @@
     chartL2 = createOrUpdateChart(chartL2, 'chart-line-2', l2);
   }
 
+  const barValuePlugin = {
+    id: 'barValueLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea } = chart;
+      chart.data.datasets.forEach((dataset, i) => {
+        const meta = chart.getDatasetMeta(i);
+        meta.data.forEach((bar, index) => {
+          const val = Number(dataset.data[index]) || 0;
+          const text = `${val.toFixed(1)}%`;
+          ctx.save();
+          ctx.font = '600 11px Poppins, sans-serif';
+          ctx.textBaseline = 'middle';
+          const textWidth = ctx.measureText(text).width;
+          if (bar.x > chartArea.left + textWidth + 14) {
+            // Draw inside the bar in white
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'right';
+            ctx.fillText(text, bar.x - 6, bar.y);
+          } else {
+            // Draw outside the bar in dark text
+            ctx.fillStyle = '#111827';
+            ctx.textAlign = 'left';
+            ctx.fillText(text, Math.min(bar.x + 5, chartArea.right - textWidth - 2), bar.y);
+          }
+          ctx.restore();
+        });
+      });
+    },
+  };
+
   function createOrUpdateChart(chartInst, canvasId, line) {
     const canvas = $(canvasId);
     if (!canvas) return null;
@@ -396,16 +426,21 @@
         labels: ['Avail', 'Perf', 'Qual', 'OEE'],
         datasets: [{
           data,
-          backgroundColor: ['#5279FD', '#A3F268', '#FFB800', '#9B51E0'],
+          backgroundColor: ['#5279FD', '#10B981', '#F59E0B', '#8B5CF6'],
           borderRadius: 4,
-          barThickness: 11,
+          barThickness: 14,
         }],
       },
+      plugins: [barValuePlugin],
       options: {
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 250 },
+        devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2.5),
+        animation: { duration: 200 },
+        layout: {
+          padding: { right: 8, left: 2, top: 4, bottom: 4 },
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -421,15 +456,15 @@
             ticks: {
               stepSize: 25,
               callback: (val) => `${val}%`,
-              font: { size: 9, family: 'Poppins' },
-              color: '#666',
+              font: { size: 9, family: 'Poppins', weight: '500' },
+              color: '#6B7280',
             },
             grid: { color: 'rgba(0,0,0,0.06)' },
           },
           y: {
             ticks: {
-              font: { size: 10, weight: '600', family: 'Poppins' },
-              color: '#000',
+              font: { size: 11, weight: '700', family: 'Poppins' },
+              color: '#111827',
             },
             grid: { display: false },
           },

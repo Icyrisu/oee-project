@@ -424,26 +424,24 @@ button.pill:disabled { opacity: .55; }
   min-height: 0;
 }
 .chart-card {
-  padding: 6px 8px;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 .chart-card .card-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  margin-bottom: 2px;
-  line-height: 1;
+  margin-bottom: 4px;
+  line-height: 1.1;
+  color: var(--black);
 }
 .chart-box {
   position: relative;
   flex: 1;
   width: 100%;
-  min-height: 130px;
-}
-.chart-box canvas {
-  width: 100% !important;
-  height: 100% !important;
+  height: 145px;
 }
 
 /* ----- Session Dropdown ----- */
