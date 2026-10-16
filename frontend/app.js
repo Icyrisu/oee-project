@@ -1,15 +1,16 @@
 /* =====================================================================
-   OEE Monitoring HMI — Tahap 1 (Vanilla JS, tanpa dependensi)
-   - SPA 3 layar (Dashboard / Report / Setting) via pergantian kelas CSS
-   - Live data via WebSocket /ws dari mock backend FastAPI
-   - Numpad sentuh untuk Setting
-   - Dev State Switcher untuk menguji 10 tampilan visual PDF
+   OEE Monitoring HMI (Vanilla JS, zero external dependencies)
+   - 3-Screen SPA (Dashboard / Report / Setting)
+   - Real-time live data via WebSocket /ws from FastAPI backend
+   - Touch Virtual Numpad for Settings
+   - Production session lifecycle with End Session confirmation modal
+   - Interrupted session recovery modal
    ===================================================================== */
 (() => {
   'use strict';
 
   // ------------------------------------------------------------------
-  // Konfigurasi
+  // Configuration
   // ------------------------------------------------------------------
   const params = new URLSearchParams(location.search);
   const API_BASE = (params.get('api') ||
@@ -19,10 +20,8 @@
   const LINES = [1, 2];
   const STATUS_LABEL = { RUNNING: 'Running', STOP: 'Stop', IDLE: 'Idle' };
   const STATUS_CLASS = { RUNNING: 'is-running', STOP: 'is-stop', IDLE: 'is-idle' };
-  const STATUS_CYCLE = ['RUNNING', 'STOP', 'IDLE'];
-  const DONUT_C = 2 * Math.PI * 48;          // keliling lingkaran donut (r = 48)
-  const WS_STALE_MS = 4000;                   // tanpa pesan > 4 dtk = dianggap putus
-  const REFERENCE_SESSION_ID = 1;             // sesi acuan PDF (01-01-2026 07:00:00)
+  const DONUT_C = 2 * Math.PI * 48;          // donut circle circumference (r = 48)
+  const WS_STALE_MS = 4000;                   // no message > 4s = considered stale
   const NUMPAD_MAX_DIGITS = 5;
   const FIELD_META = {
     target:          { title: 'Quantity Target',  unit: 'pcs', isTime: false, min: 1, max: 9999 },
@@ -31,22 +30,21 @@
   };
 
   // ------------------------------------------------------------------
-  // State UI
+  // UI State
   // ------------------------------------------------------------------
   const ui = {
     screen: 'dashboard',
-    live: null,              // snapshot terakhir dari backend
+    live: null,              // latest snapshot from backend
     wsConnected: false,
     sessionBusy: false,
     report: { sessions: [], selectedId: null, view: 'summary', page: 0, listOpen: false },
     numpad: null,            // { line, field, value, fresh }
     devOpen: false,
-    devCurrent: null,
     recoveryHandled: false,
   };
 
   // ------------------------------------------------------------------
-  // Helper
+  // Helpers
   // ------------------------------------------------------------------
   const $ = (id) => document.getElementById(id);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -74,7 +72,7 @@
   }
 
   // ------------------------------------------------------------------
-  // REST API
+  // REST API Client
   // ------------------------------------------------------------------
   async function api(path, options = {}) {
     const res = await fetch(API_BASE + path, {
@@ -86,7 +84,7 @@
       try {
         const body = await res.json();
         if (typeof body.detail === 'string') msg = body.detail;
-      } catch (_) { /* abaikan */ }
+      } catch (_) { /* ignore */ }
       throw new Error(msg);
     }
     return res.json();
@@ -118,10 +116,10 @@
     try {
       const res = await post('/api/session/recovery', { action });
       applyLive(res);
-      toast(action === 'resume' ? 'Sesi dilanjutkan' : 'Sesi sebelumnya diakhiri', 'success');
+      toast(action === 'resume' ? 'Session resumed' : 'Previous session ended', 'success');
       if (action === 'end') loadSessions();
     } catch (e) {
-      toast(`Gagal memproses sesi: ${e.message}`, 'error');
+      toast(`Failed to process session: ${e.message}`, 'error');
     }
   }
 
@@ -134,7 +132,7 @@
   }
 
   // ------------------------------------------------------------------
-  // WebSocket (auto-reconnect + watchdog)
+  // WebSocket (Auto-reconnect & watchdog)
   // ------------------------------------------------------------------
   let ws = null;
   let wsRetry = 0;
@@ -166,7 +164,7 @@
       if (ui.wsConnected) { ui.wsConnected = false; renderDashboard(); }
       scheduleReconnect();
     };
-    ws.onerror = () => { try { ws && ws.close(); } catch (_) { /* abaikan */ } };
+    ws.onerror = () => { try { ws && ws.close(); } catch (_) { /* ignore */ } };
   }
 
   function scheduleReconnect() {
@@ -179,7 +177,7 @@
   }, 1000);
 
   // ------------------------------------------------------------------
-  // Navigasi SPA
+  // SPA Navigation
   // ------------------------------------------------------------------
   function showScreen(name) {
     ui.screen = name;
@@ -194,7 +192,7 @@
   }
 
   // ------------------------------------------------------------------
-  // Layar 1 — Dashboard
+  // Screen 1 — Dashboard
   // ------------------------------------------------------------------
   function renderDashboard() {
     const d = ui.live;
@@ -202,14 +200,14 @@
     const online = linked && d.is_online;
     const active = linked && d.session_active;
 
-    // Pill sesi: STOP (merah) saat aktif, START (biru) saat idle
+    // Session pill: END (red) when active, START (blue) when idle
     const btn = $('btn-session-toggle');
-    setText(btn, active ? 'STOP' : 'START');
+    setText(btn, active ? 'END' : 'START');
     btn.classList.toggle('pill-red', active);
     btn.classList.toggle('pill-blue', !active);
     btn.disabled = !linked || ui.sessionBusy;
 
-    // Pill koneksi
+    // Connection pill
     const conn = $('badge-connection');
     setText(conn, online ? 'ONLINE' : 'OFFLINE');
     conn.classList.toggle('pill-green', online);
@@ -236,15 +234,33 @@
     });
   }
 
-  async function toggleSession() {
+  function onSessionToggleClick() {
+    if (ui.sessionBusy || !ui.live) return;
+    if (ui.live.session_active) {
+      // Require confirmation before ending active session
+      openEndConfirmation();
+    } else {
+      executeToggleSession();
+    }
+  }
+
+  function openEndConfirmation() {
+    $('confirm-overlay').classList.remove('hidden');
+  }
+
+  function closeEndConfirmation() {
+    $('confirm-overlay').classList.add('hidden');
+  }
+
+  async function executeToggleSession() {
     if (ui.sessionBusy) return;
     ui.sessionBusy = true;
     renderDashboard();
     try {
       applyLive(await post('/api/session/toggle'));
       const active = ui.live.session_active;
-      toast(active ? 'Session started' : 'Session stopped & saved', 'success');
-      if (!active) ui.report.sessions = [];   // paksa muat ulang daftar sesi
+      toast(active ? 'Session started' : 'Session ended & saved', 'success');
+      if (!active) ui.report.sessions = [];   // force refresh session list
     } catch (_) {
       toast('Backend offline', 'error');
     } finally {
@@ -254,7 +270,7 @@
   }
 
   // ------------------------------------------------------------------
-  // Layar 2 — Report
+  // Screen 2 — Report
   // ------------------------------------------------------------------
   const selectedSession = () => ui.report.sessions.find((s) => s.id === ui.report.selectedId) || null;
 
@@ -413,7 +429,7 @@
   }
 
   // ------------------------------------------------------------------
-  // Layar 3 — Setting
+  // Screen 3 — Setting
   // ------------------------------------------------------------------
   function renderSetting() {
     LINES.forEach((id) => {
@@ -425,7 +441,7 @@
   }
 
   // ------------------------------------------------------------------
-  // Numpad Modal
+  // Touch Virtual Numpad Modal
   // ------------------------------------------------------------------
   function parseDurationSec(txt) {
     if (!txt) return 0;
@@ -557,7 +573,7 @@
           }
           n.time[seg] = next;
           n.fresh = false;
-          // Auto-advance ke detik jika 2 digit menit sudah terisi
+          // Auto-advance to seconds if 2 digits of minutes filled
           if (seg === 'm' && next.length === 2) {
             n.activeSeg = 's';
             n.fresh = true;
@@ -588,7 +604,7 @@
     if (!n.isTime) {
       const num = parseInt(n.value, 10);
       if (isNaN(num) || num < meta.min || num > meta.max) {
-        toast(`Nilai harus antara ${meta.min} – ${meta.max}`, 'error');
+        toast(`Value must be between ${meta.min} and ${meta.max}`, 'error');
         return;
       }
       payloadVal = num;
@@ -597,28 +613,28 @@
       const m = parseInt(n.time.m, 10) || 0;
       const s = parseInt(n.time.s, 10) || 0;
       if (h < 0 || h > 240 || m < 0 || m > 59 || s < 0 || s > 59) {
-        toast('Format waktu tidak valid (m dan s maksimal 59)', 'error');
+        toast('Invalid time format (m and s must be 0-59)', 'error');
         return;
       }
       payloadVal = (h * 3600) + (m * 60) + s;
       if (payloadVal < meta.min || payloadVal > meta.max) {
-        toast(`Total waktu harus antara ${meta.min} – ${meta.max} detik`, 'error');
+        toast(`Total duration must be between ${meta.min} and ${meta.max} seconds`, 'error');
         return;
       }
     }
 
     if (!ui.wsConnected) {
-      toast('Backend offline — data tidak dapat disimpan', 'error');
+      toast('Backend offline — settings cannot be saved', 'error');
       return;
     }
     const saveBtn = $('key-save') || $('key-ok');
     if (saveBtn) saveBtn.disabled = true;
     try {
       applyLive(await put(`/api/settings/${n.line}`, { [n.field]: payloadVal }));
-      toast(`${meta.title} Line ${n.line} tersimpan`, 'success');
+      toast(`${meta.title} Line ${n.line} saved`, 'success');
       closeNumpad();
     } catch (e) {
-      toast(`Gagal menyimpan: ${e.message}`, 'error');
+      toast(`Failed to save: ${e.message}`, 'error');
     } finally {
       if (saveBtn) saveBtn.disabled = false;
     }
@@ -633,14 +649,24 @@
   }
 
   // ------------------------------------------------------------------
-  // Event binding
+  // Event Binding
   // ------------------------------------------------------------------
   function bindEvents() {
     // Sidebar
     $$('.nav-btn').forEach((b) => b.addEventListener('click', () => showScreen(b.dataset.target)));
 
-    // Dashboard
-    $('btn-session-toggle').addEventListener('click', toggleSession);
+    // Dashboard — Session start / confirmation
+    $('btn-session-toggle').addEventListener('click', onSessionToggleClick);
+
+    // End Session Confirmation Modal
+    $('btn-confirm-cancel').addEventListener('click', closeEndConfirmation);
+    $('btn-confirm-end').addEventListener('click', () => {
+      closeEndConfirmation();
+      executeToggleSession();
+    });
+    $('confirm-overlay').addEventListener('pointerdown', (e) => {
+      if (e.target.id === 'confirm-overlay') closeEndConfirmation();
+    });
 
     // Report
     $('btn-session-select').addEventListener('click', () => (ui.report.listOpen ? closeSessionList() : openSessionList()));
@@ -666,12 +692,12 @@
     });
     $$('.pager .dot').forEach((dot) => dot.addEventListener('click', () => setDetailPage(Number(dot.dataset.page))));
 
-    // Detail: tap card berganti halaman (Product <-> Avi/Per/Qu)
+    // Detail: tap card to toggle page (Product <-> Avi/Per/Qu)
     $('detail-cards').addEventListener('click', () => {
       setDetailPage(ui.report.page === 0 ? 1 : 0);
     });
 
-    // Setting → Numpad
+    // Setting → Touch Virtual Numpad
     $$('.setting-row.editable').forEach((row) => row.addEventListener('click', () => {
       openNumpad(Number(row.dataset.line), row.dataset.field);
     }));
@@ -689,21 +715,21 @@
       if (key && !key.disabled) numpadKey(key.dataset.key);
     });
     $('numpad-overlay').addEventListener('pointerdown', (e) => {
-      if (e.target.id === 'numpad-overlay') closeNumpad();   // tap di luar modal = batal
+      if (e.target.id === 'numpad-overlay') closeNumpad();   // tap outside modal = cancel
     });
 
     // Recovery Modal buttons
     $('btn-recovery-resume').addEventListener('click', () => handleRecovery('resume'));
     $('btn-recovery-end').addEventListener('click', () => handleRecovery('end'));
 
-    // Dev / System info panel
+    // System info panel
     $('dev-close').addEventListener('click', () => toggleDev(false));
     $('dev-overlay').addEventListener('pointerdown', (e) => {
       if (e.target.id === 'dev-overlay') toggleDev(false);
     });
     $('dev-fullscreen').addEventListener('click', toggleFullscreen);
 
-    // Double-click judul layar = toggle fullscreen
+    // Double-click title = toggle fullscreen; long-press = open system info
     $$('.title').forEach((el) => {
       el.addEventListener('dblclick', toggleFullscreen);
       let timer = null;
@@ -712,7 +738,7 @@
       ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => el.addEventListener(ev, cancel));
     });
 
-    // Keyboard
+    // Keyboard navigation
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (ui.numpad) {
@@ -735,11 +761,15 @@
       }
       if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); return; }
       if (e.key === 'd' || e.key === 'D') { toggleDev(); return; }
-      if (e.key === 'Escape') { toggleDev(false); closeSessionList(); return; }
-      if (/^\d$/.test(e.key)) runDevState(e.key === '0' ? 10 : Number(e.key));
+      if (e.key === 'Escape') {
+        closeEndConfirmation();
+        toggleDev(false);
+        closeSessionList();
+        return;
+      }
     });
 
-    // Kiosk: cegah menu konteks saat tekan-tahan
+    // Kiosk: prevent context menu on long-press
     document.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 

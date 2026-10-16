@@ -1,9 +1,9 @@
-"""Fake Feeder Tool — Penguji Data Mesin (Simulasi Node-RED / ESP32)
+"""Fake Feeder Tool — Machine Data Simulator (Node-RED / ESP32 Simulator)
 
-Mengirim paket data mesin berkala via HTTP POST ke endpoint backend `/api/ingest`.
-Gunakan script ini untuk menguji backend OEE tanpa memerlukan perangkat keras ESP32.
+Sends periodic machine data packets via HTTP POST to the backend endpoint `/api/ingest`.
+Use this script to test the OEE backend without physical ESP32 hardware.
 
-Cara Penggunaan:
+Usage:
     python tools/fake_feeder.py
     python tools/fake_feeder.py --l1-state RUNNING --l2-state STOP
     python tools/fake_feeder.py --emg1
@@ -30,28 +30,28 @@ def send_packet(url: str, payload: dict) -> bool:
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             return resp.status == 200
     except Exception as e:
-        print(f"[feeder] Gagal kirim ke {url}: {e}", file=sys.stderr)
+        print(f"[feeder] Failed to send packet to {url}: {e}", file=sys.stderr)
         return False
 
 
 def main():
-    parser = argparse.ArgumentParser(description="OEE Fake Feeder (Simulasi Node-RED)")
-    parser.add_argument("--url", default="http://127.0.0.1:8000/api/ingest", help="URL endpoint ingest")
-    parser.add_argument("--rate", type=float, default=1.0, help="Interval pengiriman (detik)")
-    parser.add_argument("--l1-state", default="RUNNING", choices=["RUNNING", "STOP", "IDLE"], help="Status line 1")
-    parser.add_argument("--l2-state", default="RUNNING", choices=["RUNNING", "STOP", "IDLE"], help="Status line 2")
-    parser.add_argument("--emg1", action="store_true", help="Simulasikan Emergency Stop line 1")
-    parser.add_argument("--emg2", action="store_true", help="Simulasikan Emergency Stop line 2")
-    parser.add_argument("--disconnected", action="store_true", help="Kirim sinyal ESP32 terputus")
+    parser = argparse.ArgumentParser(description="OEE Fake Feeder (Node-RED Simulator)")
+    parser.add_argument("--url", default="http://127.0.0.1:8000/api/ingest", help="Ingest endpoint URL")
+    parser.add_argument("--rate", type=float, default=1.0, help="Packet interval (seconds)")
+    parser.add_argument("--l1-state", default="RUNNING", choices=["RUNNING", "STOP", "IDLE"], help="Line 1 state")
+    parser.add_argument("--l2-state", default="RUNNING", choices=["RUNNING", "STOP", "IDLE"], help="Line 2 state")
+    parser.add_argument("--emg1", action="store_true", help="Simulate Emergency Stop on Line 1")
+    parser.add_argument("--emg2", action="store_true", help="Simulate Emergency Stop on Line 2")
+    parser.add_argument("--disconnected", action="store_true", help="Simulate ESP32 disconnected state")
     args = parser.parse_args()
 
     print("=" * 60)
-    print("OEE Fake Feeder berjalan...")
+    print("OEE Fake Feeder running...")
     print(f"Target URL : {args.url}")
     print(f"Interval   : {args.rate}s")
     print(f"Line 1     : {args.l1_state} (EMG={args.emg1})")
     print(f"Line 2     : {args.l2_state} (EMG={args.emg2})")
-    print("Tekan Ctrl+C untuk berhenti")
+    print("Press Ctrl+C to stop")
     print("=" * 60)
 
     t1 = 30.2
@@ -64,7 +64,7 @@ def main():
             t1 = round(min(36.0, max(27.0, t1 + random.uniform(-0.15, 0.15))), 1)
             t2 = round(min(36.0, max(27.0, t2 + random.uniform(-0.15, 0.15))), 1)
 
-            # Peluang deteksi produk: misal setiap 10-15 detik
+            # Product detection probability: approx every 10-15 seconds
             l1_good = 1 if (args.l1_state == "RUNNING" and random.random() < 0.12) else 0
             l1_reject = 1 if (l1_good and random.random() < 0.15) else 0
             if l1_reject:
@@ -104,7 +104,7 @@ def main():
             )
             time.sleep(args.rate)
     except KeyboardInterrupt:
-        print("\nFake feeder dihentikan.")
+        print("\nFake feeder stopped.")
 
 
 if __name__ == "__main__":

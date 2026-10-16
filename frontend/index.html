@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=480, height=320, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="description" content="OEE Monitoring HMI 480x320 — dashboard real-time OEE dua line produksi, laporan sesi produksi, dan pengaturan target untuk layar sentuh Raspberry Pi.">
+  <meta name="description" content="OEE Monitoring HMI 480x320 — real-time dual-line OEE dashboard, production session reports, and target configuration for Raspberry Pi touchscreen.">
   <meta name="theme-color" content="#000000">
   <title>OEE Monitoring — HMI 480×320</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,7 +14,7 @@
 </head>
 <body>
 
-  <!-- ===== SVG Icon Sprite (inline, tanpa request tambahan) ===== -->
+  <!-- ===== SVG Icon Sprite (inline, zero extra requests) ===== -->
   <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <rect x="3" y="3" width="7.5" height="7.5" rx="2"/>
@@ -53,7 +53,7 @@
 
     <div class="content" id="content">
 
-      <!-- ================= LAYAR 1: DASHBOARD ================= -->
+      <!-- ================= SCREEN 1: DASHBOARD ================= -->
       <section class="screen active" id="screen-dashboard" data-screen="dashboard" aria-labelledby="title-dashboard">
         <header class="screen-header">
           <h2 class="title" id="title-dashboard"><b>OEE</b> <i>Monitoring</i></h2>
@@ -100,7 +100,7 @@
         </div>
       </section>
 
-      <!-- ================= LAYAR 2: REPORT ================= -->
+      <!-- ================= SCREEN 2: REPORT ================= -->
       <section class="screen" id="screen-report" data-screen="report" aria-labelledby="title-report">
         <header class="screen-header">
           <h2 class="title" id="title-report"><b>OEE</b> <i>Report</i></h2>
@@ -117,7 +117,7 @@
           <button type="button" class="btn-blue" id="btn-export">Export Data</button>
         </div>
 
-        <!-- Sub-state 6 & 7: donut summary -->
+        <!-- Donut summary -->
         <div class="report-cards" id="report-summary">
           <article class="white-card donut-card">
             <h3 class="card-title">Line 1</h3>
@@ -141,7 +141,7 @@
           </article>
         </div>
 
-        <!-- Sub-state 8 & 9: detail data -->
+        <!-- Detail data -->
         <div class="report-detail hidden" id="report-detail">
           <div class="detail-cards" id="detail-cards">
             <article class="white-card detail-card" aria-label="Detail Line 1">
@@ -161,13 +161,13 @@
           </div>
         </div>
 
-        <!-- Dropdown daftar sesi -->
+        <!-- Session list dropdown -->
         <div class="session-list hidden" id="session-list" role="listbox" aria-label="Session list">
           <div id="session-items"></div>
         </div>
       </section>
 
-      <!-- ================= LAYAR 3: SETTING ================= -->
+      <!-- ================= SCREEN 3: SETTING ================= -->
       <section class="screen" id="screen-setting" data-screen="setting" aria-labelledby="title-setting">
         <header class="screen-header">
           <h2 class="title" id="title-setting"><b>System</b> <i>Setting</i></h2>
@@ -219,7 +219,7 @@
       </section>
     </div>
 
-    <!-- ================= SIDEBAR NAVIGASI (KANAN) ================= -->
+    <!-- ================= RIGHT SIDEBAR NAVIGATION ================= -->
     <nav class="sidebar" aria-label="Main navigation">
       <button type="button" class="nav-btn active" id="nav-dashboard" data-target="dashboard" aria-label="Dashboard — OEE Monitoring" aria-current="page">
         <svg><use href="#i-grid"/></svg>
@@ -277,21 +277,33 @@
       </div>
     </div>
 
-    <!-- ================= MODAL PEMULIHAN SESI (TERPUTUS/MATI LISTRIK) ================= -->
+    <!-- ================= END SESSION CONFIRMATION MODAL ================= -->
+    <div class="overlay hidden" id="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="confirm-card">
+        <h3 class="confirm-title" id="confirm-title">End Production Session?</h3>
+        <p class="confirm-desc" id="confirm-desc">Are you sure you want to end this production session? All recorded data will be finalized and saved to the database.</p>
+        <div class="confirm-actions">
+          <button type="button" class="key key-cancel confirm-btn" id="btn-confirm-cancel">CANCEL</button>
+          <button type="button" class="key key-clear confirm-btn" id="btn-confirm-end">END SESSION</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= INTERRUPTED SESSION RECOVERY MODAL ================= -->
     <div class="overlay hidden" id="recovery-overlay" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
       <div class="recovery-card">
-        <h3 class="recovery-title" id="recovery-title">Sesi Sebelumnya Belum Selesai</h3>
-        <p class="recovery-desc">Ditemukan sesi produksi yang belum diakhiri (misal akibat mati listrik atau restart):</p>
+        <h3 class="recovery-title" id="recovery-title">Previous Session Interrupted</h3>
+        <p class="recovery-desc">An unfinished production session was found (e.g. from power outage or restart):</p>
         <div class="recovery-info" id="recovery-info">
-          <div><strong>Mulai:</strong> <span id="rec-started">-</span></div>
-          <div><strong>Durasi:</strong> <span id="rec-duration">-</span></div>
+          <div><strong>Started:</strong> <span id="rec-started">-</span></div>
+          <div><strong>Duration:</strong> <span id="rec-duration">-</span></div>
           <div><strong>Line 1:</strong> Good <span id="rec-l1-good">0</span> · Reject <span id="rec-l1-reject">0</span></div>
           <div><strong>Line 2:</strong> Good <span id="rec-l2-good">0</span> · Reject <span id="rec-l2-reject">0</span></div>
         </div>
-        <p class="recovery-question">Apakah Anda ingin melanjutkan sesi ini atau mengakhirinya?</p>
+        <p class="recovery-question">Do you want to resume this session or end it?</p>
         <div class="recovery-actions">
-          <button type="button" class="key key-save recovery-btn" id="btn-recovery-resume">RESUME SESI</button>
-          <button type="button" class="key key-clear recovery-btn" id="btn-recovery-end">AKHIRI SESI</button>
+          <button type="button" class="key key-save recovery-btn" id="btn-recovery-resume">RESUME SESSION</button>
+          <button type="button" class="key key-clear recovery-btn" id="btn-recovery-end">END SESSION</button>
         </div>
       </div>
     </div>
@@ -301,7 +313,7 @@
       <div class="dev-panel">
         <div class="dev-head">
           <strong id="dev-title">System Info</strong>
-          <span class="dev-hint">F: Fullscreen · Esc: Tutup</span>
+          <span class="dev-hint">F: Fullscreen · Esc: Close</span>
           <button type="button" class="dev-close" id="dev-close" aria-label="Close panel">
             <svg class="icon-16"><use href="#i-close"/></svg>
           </button>
@@ -317,7 +329,7 @@
       </div>
     </div>
 
-    <!-- Toast notifikasi -->
+    <!-- Toast notification -->
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </main>
 </body>

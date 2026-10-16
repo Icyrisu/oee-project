@@ -30,7 +30,7 @@ def update_setting(
     cur.execute("SELECT target_qty, ideal_cycle_sec, planned_prod_sec FROM line_settings WHERE line_id = ?", (line_id,))
     row = cur.fetchone()
     if not row:
-        raise ValueError(f"Line {line_id} tidak ditemukan")
+        raise ValueError(f"Line {line_id} not found")
 
     new_target = target if target is not None else row["target_qty"]
     new_cycle = cycle_time if cycle_time is not None else row["ideal_cycle_sec"]

@@ -43,9 +43,9 @@ def register_routes(app, engine):
     @router.put("/api/settings/{line_id}")
     async def update_settings(line_id: int, body: SettingsUpdate):
         if line_id not in (1, 2):
-            raise HTTPException(status_code=404, detail=f"Line {line_id} tidak ditemukan")
+            raise HTTPException(status_code=404, detail=f"Line {line_id} not found")
         if body.target is None and body.cycle_time is None and body.planned_seconds is None:
-            raise HTTPException(status_code=400, detail="Sediakan minimal salah satu: target, cycle_time, atau planned_seconds")
+            raise HTTPException(status_code=400, detail="Provide at least one of target, cycle_time, or planned_seconds")
 
         snap = engine.update_line_setting(line_id, body)
         await hub.broadcast(snap)
