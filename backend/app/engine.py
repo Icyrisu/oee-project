@@ -269,6 +269,8 @@ class Engine:
         return self.snapshot()
 
     def update_line_setting(self, line_id: int, payload: SettingsUpdate) -> dict:
+        if self.session_active:
+            raise ValueError("Settings are locked during an active production session. Please end the session first.")
         updated = update_setting(
             self.conn,
             line_id=line_id,

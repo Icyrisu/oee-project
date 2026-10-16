@@ -195,6 +195,17 @@
     });
     closeSessionList();
     if (name === 'report' && !ui.report.sessions.length) loadSessions();
+    if (name === 'info') renderInfo();
+  }
+
+  function renderInfo() {
+    const cur = $('info-current-url');
+    if (cur && location.hostname) {
+      const port = location.port ? `:${location.port}` : '';
+      if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1' && location.hostname !== '10.42.0.1') {
+        cur.textContent = `http://${location.hostname}${port}`;
+      }
+    }
   }
 
   // ------------------------------------------------------------------
@@ -662,6 +673,13 @@
   // Screen 3 — Setting
   // ------------------------------------------------------------------
   function renderSetting() {
+    const isLocked = Boolean(ui.live?.session_active);
+    $$('.setting-row.editable').forEach((row) => {
+      row.classList.toggle('locked', isLocked);
+    });
+    const banner = $('setting-lock-banner');
+    if (banner) banner.classList.toggle('hidden', !isLocked);
+
     LINES.forEach((id) => {
       const line = findLine(ui.live, id);
       setText($(`val-target-${id}`), line ? String(line.target) : '-');
@@ -683,6 +701,10 @@
   }
 
   function openNumpad(line, field) {
+    if (ui.live?.session_active) {
+      toast('Settings are locked during an active session', 'error');
+      return;
+    }
     const meta = FIELD_META[field];
     if (!meta) return;
     const ln = findLine(ui.live, line);
@@ -1067,6 +1089,7 @@
     renderDashboard();
     renderSetting();
     renderReport();
+    renderInfo();
     connectWS();
   }
 

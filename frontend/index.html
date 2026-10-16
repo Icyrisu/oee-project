@@ -48,6 +48,15 @@
     <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
       <path d="M6 6l12 12M18 6L6 18"/>
     </symbol>
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M12 8h.01"/>
+      <path d="M11 12h1v4h1"/>
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </symbol>
   </svg>
 
   <main class="app" id="app">
@@ -195,6 +204,10 @@
       <section class="screen" id="screen-setting" data-screen="setting" aria-labelledby="title-setting">
         <header class="screen-header">
           <h2 class="title" id="title-setting"><b>System</b> <i>Setting</i></h2>
+          <div class="lock-indicator hidden" id="setting-lock-banner">
+            <svg class="icon-14"><use href="#i-lock"/></svg>
+            <span>Locked (Active Session)</span>
+          </div>
         </header>
 
         <div class="setting-grid">
@@ -241,6 +254,91 @@
           </div>
         </div>
       </section>
+
+      <!-- ================= SCREEN 4: CONNECTION GUIDE ================= -->
+      <section class="screen" id="screen-info" data-screen="info" aria-labelledby="title-info">
+        <header class="screen-header">
+          <h2 class="title" id="title-info"><b>Connection</b> <i>Guide</i></h2>
+          <span class="pill pill-green">STANDALONE AP</span>
+        </header>
+
+        <div class="info-body">
+          <div class="info-grid">
+            <!-- Card 1: Direct Wi-Fi Hotspot -->
+            <article class="info-card">
+              <div class="info-card-header">
+                <svg class="info-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                  <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                  <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                  <circle cx="12" cy="20" r="1" fill="currentColor"/>
+                </svg>
+                <span>Wi-Fi Hotspot (Direct)</span>
+              </div>
+              <div class="info-rows">
+                <div class="info-row">
+                  <span class="info-lbl">Hotspot SSID</span>
+                  <span class="info-val badge-blue">PI-OEE-DASHBOARD</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Password</span>
+                  <span class="info-val badge-dark">raspberry</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Browser URL</span>
+                  <span class="info-val badge-green">http://10.42.0.1:8000</span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 2: Ethernet / LAN Alternative -->
+            <article class="info-card">
+              <div class="info-card-header">
+                <svg class="info-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="2" width="20" height="8" rx="2"/>
+                  <rect x="2" y="14" width="20" height="8" rx="2"/>
+                  <line x1="6" y1="6" x2="6.01" y2="6"/>
+                  <line x1="6" y1="18" x2="6.01" y2="18"/>
+                </svg>
+                <span>LAN / Ethernet Cable</span>
+              </div>
+              <div class="info-rows">
+                <div class="info-row">
+                  <span class="info-lbl">Connection</span>
+                  <span class="info-val badge-dark">Direct RJ-45 Cable</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">mDNS URL</span>
+                  <span class="info-val badge-blue">http://pi.local:8000</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Static / IP</span>
+                  <span class="info-val badge-green" id="info-current-url">http://192.168.1.118:8000</span>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <!-- Card 3: Step-by-step instructions -->
+          <article class="info-steps-card">
+            <div class="info-steps-title">HOW TO CONNECT FROM LAPTOP / MOBILE</div>
+            <ul class="info-steps-list">
+              <li>
+                <span class="step-num">1</span>
+                <span>Turn on Wi-Fi on your laptop, tablet, or smartphone.</span>
+              </li>
+              <li>
+                <span class="step-num">2</span>
+                <span>Connect to Wi-Fi <strong class="step-code">PI-OEE-DASHBOARD</strong> with password <strong class="step-code">raspberry</strong>.</span>
+              </li>
+              <li>
+                <span class="step-num">3</span>
+                <span>Open Google Chrome or browser and navigate to <strong class="step-code">http://10.42.0.1:8000</strong>.</span>
+              </li>
+            </ul>
+          </article>
+        </div>
+      </section>
     </div>
 
     <!-- ================= RIGHT SIDEBAR NAVIGATION ================= -->
@@ -253,6 +351,9 @@
       </button>
       <button type="button" class="nav-btn" id="nav-setting" data-target="setting" aria-label="Setting — System Setting">
         <svg><use href="#i-sliders"/></svg>
+      </button>
+      <button type="button" class="nav-btn" id="nav-info" data-target="info" aria-label="Information — Connection Guide">
+        <svg><use href="#i-info"/></svg>
       </button>
     </nav>
 

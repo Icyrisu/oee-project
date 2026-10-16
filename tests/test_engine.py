@@ -141,3 +141,35 @@ def test_engine_interrupted_session_recovery():
     assert snap2["session_active"] is True
     assert snap2["lines"][0]["good"] == 8
     assert snap2["lines"][0]["reject"] == 2
+
+
+def test_engine_update_setting_during_active_session_rejected():
+    import pytest
+    conn = init_db(":memory:")
+    engine = Engine(conn)
+    engine.startup()
+    engine.is_online = True
+
+    # 1. Setting update succeeds when session is inactive
+    engine.update_line_setting(1, SettingsUpdate(target=50))
+    assert engine.lines[1]["target"] == 50
+
+    # 2. Start session
+    engine.start_session()
+    assert engine.session_active is True
+
+    # 3. Setting update is rejected with ValueError
+    with pytest.raises(ValueError, match="Settings are locked during an active production session"):
+        engine.update_line_setting(1, SettingsUpdate(target=100))
+
+    # Target unchanged
+    assert engine.lines[1]["target"] == 50
+
+    # 4. Stop session
+    engine.stop_session()
+    assert engine.session_active is False
+
+    # 5. Setting update succeeds again
+    engine.update_line_setting(1, SettingsUpdate(target=100))
+    assert engine.lines[1]["target"] == 100
+

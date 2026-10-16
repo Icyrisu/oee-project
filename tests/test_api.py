@@ -59,6 +59,7 @@ def test_api_ingest(client):
 
 
 def test_api_settings_update(client):
+    # Setting update succeeds when session is inactive
     res = client.put(
         "/api/settings/1",
         json={"target": 50, "cycle_time": 45.0, "planned_seconds": 3600},
@@ -69,6 +70,18 @@ def test_api_settings_update(client):
     assert line1["target"] == 50
     assert line1["cycle_time"] == 45.0
     assert line1["planned_seconds"] == 3600
+
+    # Start session
+    client.post("/api/ingest", json={"ts_ms": 1000, "esp32_connected": True})
+    res_start = client.post("/api/session/toggle")
+    assert res_start.status_code == 200
+    assert res_start.json()["session_active"] is True
+
+    # Try to update settings while session is active -> HTTP 400
+    res_locked = client.put("/api/settings/1", json={"target": 100})
+    assert res_locked.status_code == 400
+    assert "locked" in res_locked.json()["detail"].lower()
+
 
 
 def test_api_session_lifecycle(client):
