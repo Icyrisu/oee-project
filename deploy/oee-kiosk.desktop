@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=OEE Dashboard Kiosk
+Comment=Start OEE Dashboard in Chromium Kiosk Mode
+Exec=/bin/bash /home/pi/oee-project/deploy/kiosk.sh
+Terminal=false
+X-GNOME-Autostart-enabled=true
