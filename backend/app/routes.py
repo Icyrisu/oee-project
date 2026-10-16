@@ -98,21 +98,31 @@ def register_routes(app, engine):
             time.sleep(0.3)
             if sys.platform.startswith("linux"):
                 commands = [
-                    ["sudo", "/sbin/shutdown", "-h", "now"],
-                    ["sudo", "shutdown", "-h", "now"],
-                    ["sudo", "/bin/systemctl", "poweroff"],
-                    ["sudo", "systemctl", "poweroff"],
+                    ["sudo", "-n", "/sbin/shutdown", "-h", "now"],
+                    ["sudo", "-n", "shutdown", "-h", "now"],
+                    ["sudo", "-n", "/bin/systemctl", "poweroff"],
+                    ["sudo", "-n", "systemctl", "poweroff"],
+                    ["sudo", "-n", "poweroff"],
+                    ["systemctl", "poweroff"],
+                    ["/bin/systemctl", "poweroff"],
                     ["sudo", "poweroff"],
                 ]
+                success = False
                 for cmd in commands:
                     try:
                         res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
                         if res.returncode == 0:
+                            print(f"[SYSTEM] Poweroff command succeeded: {' '.join(cmd)}", flush=True)
+                            success = True
                             break
-                    except Exception:
-                        pass
+                        else:
+                            print(f"[SYSTEM] Command {' '.join(cmd)} returned {res.returncode}: {res.stderr.strip()}", flush=True)
+                    except Exception as e:
+                        print(f"[SYSTEM] Command {' '.join(cmd)} failed to run: {e}", flush=True)
+                if not success:
+                    print("[SYSTEM] All poweroff attempts failed! Check sudoers NOPASSWD permissions.", flush=True)
             else:
-                print("[SYSTEM] Simulated poweroff triggered")
+                print("[SYSTEM] Simulated poweroff triggered", flush=True)
 
         threading.Thread(target=_do_shutdown, daemon=True).start()
         return {"status": "ok", "message": "System is powering off"}
