@@ -1,0 +1,15 @@
+[Unit]
+Description=OEE Monitoring Production Backend (FastAPI + SQLite)
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/oee-project
+ExecStart=/home/pi/oee-project/.venv/bin/python backend/run.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

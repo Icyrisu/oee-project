@@ -1,73 +1,197 @@
-# OEE Monitoring — Raspberry Pi HMI 480×320
+# OEE Monitoring — Raspberry Pi HMI (FastAPI + SQLite + SPA)
 
-Ini antarmuka web (SPA) untuk memantau OEE dua line produksi di layar sentuh 3.5" Raspberry Pi (landscape **480 × 320**).
+Aplikasi HMI pemantauan OEE (*Overall Equipment Effectiveness*) untuk 2 line produksi manufaktur pada layar sentuh Raspberry Pi (resolusi standar **480 × 320** atau auto-fit layar monitor).
 
-> **Status: Tahap 1** — Frontend + Mock Backend (in-memory).
-> Belum ada SQLite, belum ada serial ESP32, belum ada firmware (semuanya masuk Tahap 2).
+Aplikasi berjalan secara lokal tanpa memerlukan koneksi internet, menggunakan **FastAPI** dengan database lokal **SQLite (WAL)**, antarmuka Single Page Application (**Vanilla HTML/CSS/JS**), serta siap dihubungkan ke **Node-RED** sebagai jembatan komunikasi serial ESP32.
 
-## Struktur
+---
 
+## Arsitektur Sistem
+
+```text
+┌─────────────────┐       USB Serial (115200)       ┌────────────────────────┐
+│  Hardware ESP32 │ ──────────────────────────────> │   Node-RED (Bridge)    │
+│  (Sensor & PB)  │                                 │ Flow: Serial in ->     │
+└─────────────────┘                                 │       HTTP Request     │
+                                                    └───────────┬────────────┘
+                                                                │ POST /api/ingest
+                                                                ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Raspberry Pi — FastAPI Backend & SQLite WAL                                │
+│                                                                            │
+│  - Engine OEE & Sesi Produksi                                              │
+│  - Database lokal: oee_local.db (Settings, Sesi, Log Status)               │
+│  - Pemulihan otomatis jika mati listrik mendadak (Resume / Akhiri)         │
+│  - WebSocket Server (/ws broadcast state tiap 1 detik)                     │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      │ WebSocket /ws & REST
+                                      ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Chromium Kiosk — Frontend SPA                                              │
+│ Dashboard Real-time · Report Riwayat Sesi · System Setting (Touch Numpad)  │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Struktur Proyek
+
+```text
 oee-project/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── config.py         # Konfigurasi port, path DB, timeout link
+│   │   ├── db.py             # SQLite WAL & inisialisasi skema tabel
+│   │   ├── engine.py         # State runtime, logika sesi, checkpoint
+│   │   ├── hub.py            # WebSocket client broadcaster
+│   │   ├── oee.py            # Fungsi murni perhitungan A/P/Q/OEE
+│   │   ├── repository.py     # Akses query SQL SQLite
+│   │   ├── routes.py         # Endpoint REST API & WebSocket
+│   │   └── schemas.py        # Validasi Pydantic
+│   ├── run.py                # Entrypoint server (Uvicorn)
+│   ├── requirements.txt      # Dependency produksi
+│   └── requirements-dev.txt  # Dependency pengujian (pytest, httpx)
 ├── frontend/
-│   ├── index.html      # SPA: Dashboard, Report, Setting, Numpad, Dev Switcher
-│   ├── styles.css      # Kanvas fixed 480x320, palet eksak PDF
-│   └── app.js          # Vanilla JS: navigasi, WebSocket, numpad
-└── backend/
-    ├── mock_server.py  # FastAPI in-memory + simulator asyncio 1 dtk
-    └── requirements.txt
+│   ├── index.html            # SPA: Dashboard, Report, Setting, Modal Numpad & Recovery
+│   ├── styles.css            # Desain responsif, touch-friendly, palet HMI
+│   └── app.js                # State UI, navigasi, WebSocket client, kalkulator sentuh
+├── tests/
+│   ├── test_api.py           # Pengujian endpoint FastAPI
+│   ├── test_engine.py        # Pengujian engine runtime & sesi
+│   └── test_oee.py           # Pengujian rumus A/P/Q/OEE
+├── tools/
+│   └── fake_feeder.py        # Simulator data pengganti ESP32/Node-RED untuk testing
+└── deploy/
+    └── oee-backend.service   # Unit service systemd untuk autostart di Raspberry Pi
 ```
 
-Seluruh ikon berupa **SVG inline** (sprite `<symbol>`). Tidak ada framework, font eksternal, atau CDN, jadi tetap jalan offline di Pi.
+---
 
-## Menjalankan
+## Cara Menjalankan
 
-```powershell
+### 1. Persiapan Virtual Environment
+
+```bash
+# Clone atau buka direktori proyek
+cd oee-project
+
+# Buat virtual environment
 python -m venv .venv
-.\.venv\Scripts\pip install -r backend\requirements.txt     # Linux/Pi: .venv/bin/pip
-.\.venv\Scripts\python backend\mock_server.py               # Linux/Pi: .venv/bin/python
+
+# Aktifkan virtual environment
+# Di Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+# Di Raspberry Pi (Linux):
+source .venv/bin/activate
+
+# Install dependency
+pip install -r backend/requirements.txt
 ```
 
-Lalu buka **http://localhost:8000**. Backend juga menyajikan frontend dari origin yang sama.
+### 2. Menjalankan Backend
 
-Variabel opsional: `OEE_HOST` (default `0.0.0.0`), `OEE_PORT` (default `8000`).
-Kalau frontend dibuka dari origin lain, tambahkan `?api=http://<host>:8000`.
+```bash
+python backend/run.py
+```
 
-Mode kiosk di Pi (contoh):
+Server berjalan pada port `8000`. Buka browser di **http://localhost:8000**.
+*(Frontend disajikan langsung dari backend pada alamat yang sama)*.
+
+### 3. Menjalankan Pengujian Otomatis
+
+```bash
+pip install -r backend/requirements-dev.txt
+pytest tests -v
+```
+
+---
+
+## Pengujian Tanpa Hardware (Fake Feeder)
+
+Untuk menguji aplikasi tanpa perangkat keras ESP32 atau Node-RED, jalankan script `fake_feeder.py` di terminal terpisah:
+
+```bash
+python tools/fake_feeder.py
+```
+
+Opsi tambahan:
+* `--l1-state RUNNING` / `STOP` / `IDLE` (mengatur status line 1)
+* `--l2-state RUNNING` / `STOP` / `IDLE` (mengatur status line 2)
+* `--emg1` (simulasikan tombol Emergency Stop line 1 ditekan)
+* `--rate 0.5` (interval pengiriman dalam detik)
+
+---
+
+## Kontrak Integrasi Node-RED (`POST /api/ingest`)
+
+Node-RED bertindak murni sebagai **bridge serial USB**:
+1. Membaca paket serial NDJSON dari port USB ESP32 (`/dev/ttyUSB0` atau `/dev/ttyACM0`) pada baud rate `115200`.
+2. Melakukan HTTP POST JSON ke `http://127.0.0.1:8000/api/ingest`.
+
+Format JSON payload yang diterima `/api/ingest`:
+
+```json
+{
+  "ts_ms": 124500,
+  "esp32_connected": true,
+  "line1": {
+    "state": "RUNNING",
+    "emg": false,
+    "temp_c": 30.2,
+    "good_delta": 1,
+    "reject_delta": 0,
+    "last_mm": 145
+  },
+  "line2": {
+    "state": "STOP",
+    "emg": false,
+    "temp_c": 31.0,
+    "good_delta": 0,
+    "reject_delta": 0,
+    "last_mm": 0
+  }
+}
+```
+
+* Keterangan:
+  * `state`: `"RUNNING"`, `"STOP"`, atau `"IDLE"`.
+  * `emg`: `true` jika tombol Emergency Stop ditekan (mesin otomatis dipaksa STOP).
+  * `good_delta`: Jumlah barang bagus yang baru terdeteksi (ditambahkan ke counter jika sesi aktif).
+  * `reject_delta`: Jumlah barang reject yang baru terdeteksi.
+
+---
+
+## Logika Sesi & Pemulihan Mati Listrik
+
+1. **Status Mesin vs Sesi:**
+   * Saat sesi **belum dimulai** (tombol masih bertuliskan `START`), status mesin pada layar tetap `IDLE` dan produk belum dihitung.
+   * Saat tombol `START` ditekan, sesi dimulai dan tombol berubah menjadi `STOP`.
+   * Di line fisik, PB1 digunakan untuk RUN/STOP motor, PB2 untuk menandai barang reject, dan EMG untuk Emergency Stop.
+2. **Kalkulasi Availability:**
+   * Availability dihitung dengan rumus: $\text{Availability} = \frac{\text{Run Time}}{\text{Planned Production Time}}$.
+   * Jika Planned Time diatur `0` (belum ditentukan), pembagi otomatis menggunakan **lama sesi berjalan** ($\text{Elapsed Time}$). Kondisi mesin berhenti (STOP) otomatis terbaca sebagai downtime yang menurunkan Availability.
+3. **Pemulihan Sesi (Crash Recovery):**
+   * Backend menyimpan checkpoint data ke SQLite secara berkala setiap 5 detik.
+   * Jika Raspberry Pi mati listrik mendadak saat sesi sedang berlangsung, saat backend kembali menyala antarmuka akan menampilkan pop-up konfirmasi:
+     * **RESUME SESI:** Melanjutkan sesi produksi dari data terakhir.
+     * **AKHIRI SESI:** Menutup sesi tersebut dan menyimpannya secara rapi ke riwayat laporan.
+
+---
+
+## Menjalankan Otomatis di Raspberry Pi (Autostart)
+
+Salin unit service systemd:
+
+```bash
+sudo cp deploy/oee-backend.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable oee-backend
+sudo systemctl start oee-backend
+```
+
+Untuk mode Chromium Kiosk layar penuh pada Raspberry Pi OS:
 
 ```bash
 chromium-browser --kiosk --window-size=480,320 --noerrdialogs --disable-pinch http://localhost:8000
 ```
-
-## Dev State Switcher (uji 10 tampilan PDF)
-
-Cara membuka: tekan **`D`** di keyboard, atau **tekan-tahan judul layar ±0.8 detik** di layar sentuh.
-Shortcut langsung: **`1`–`9`, `0`**.
-
-| # | Tampilan | # | Tampilan |
-|---|----------|---|----------|
-| 1 | Both Running | 6 | Report — belum pilih sesi |
-| 2 | Line 1 Running, Line 2 Stop | 7 | Report — sesi terpilih |
-| 3 | Both Stop | 8 | Detail Data — Produk |
-| 4 | Offline / Idle | 9 | Detail Data — A/P/Q |
-| 5 | Start Sesi Running 0.0% | 10 | System Setting |
-
-Panel ini juga punya tombol untuk mengganti ONLINE/OFFLINE dan mengganti status per line.
-
-## API Mock
-
-| Method | Path | Fungsi |
-|--------|------|--------|
-| WS | `/ws` | Broadcast snapshot state tiap 1 detik |
-| GET | `/api/state` | Snapshot state saat ini |
-| POST | `/api/session/toggle` | START ↔ STOP sesi (sesi yang dihentikan masuk ke daftar Report) |
-| POST | `/api/mock/toggle-state` | `{scenario}` atau `{line_id?, status}` / `{connection}` |
-| GET | `/api/sessions` | Daftar sesi mock |
-| PUT | `/api/settings/{line_id}` | `{target?, cycle_time?}` (1–9999) |
-
-Nilai `scenario` yang tersedia: `both_running`, `line2_stop`, `both_stop`, `idle_offline`, `start_session`.
-
-## Catatan
-
-- Mock memproduksi barang secara acak dengan kecepatan ±90% dari ideal (`1 / cycle_time`). Dengan cycle time default 60 detik, counter naik pelan. Kalau mau demo lebih cepat, set Ideal Cycle Time ke 2–5 detik lewat numpad.
-- Data contoh di Report (sesi `01-01-2026 07:00:00`) memakai angka literal dari spesifikasi.

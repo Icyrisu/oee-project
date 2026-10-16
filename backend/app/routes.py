@@ -1,0 +1,66 @@
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from .hub import hub
+from .repository import get_all_sessions
+from .schemas import IngestPayload, RecoveryAction, SettingsUpdate
+
+def register_routes(app, engine):
+    router = APIRouter()
+
+    @router.get("/api/health")
+    async def health():
+        return {
+            "status": "ok",
+            "is_online": engine.is_online,
+            "session_active": engine.session_active,
+        }
+
+    @router.get("/api/state")
+    async def get_state():
+        return engine.snapshot()
+
+    @router.post("/api/ingest")
+    async def ingest_packet(payload: IngestPayload):
+        engine.ingest(payload)
+        return {"status": "ok"}
+
+    @router.post("/api/session/toggle")
+    async def toggle_session():
+        snap = engine.toggle_session()
+        await hub.broadcast(snap)
+        return snap
+
+    @router.post("/api/session/recovery")
+    async def session_recovery(body: RecoveryAction):
+        snap = engine.handle_recovery(body.action)
+        await hub.broadcast(snap)
+        return snap
+
+    @router.get("/api/sessions")
+    async def get_sessions():
+        sessions = get_all_sessions(engine.conn)
+        return {"sessions": sessions}
+
+    @router.put("/api/settings/{line_id}")
+    async def update_settings(line_id: int, body: SettingsUpdate):
+        if line_id not in (1, 2):
+            raise HTTPException(status_code=404, detail=f"Line {line_id} tidak ditemukan")
+        if body.target is None and body.cycle_time is None and body.planned_seconds is None:
+            raise HTTPException(status_code=400, detail="Sediakan minimal salah satu: target, cycle_time, atau planned_seconds")
+
+        snap = engine.update_line_setting(line_id, body)
+        await hub.broadcast(snap)
+        return snap
+
+    @router.websocket("/ws")
+    async def websocket_endpoint(ws: WebSocket):
+        await hub.connect(ws)
+        try:
+            await ws.send_json(engine.snapshot())
+            while True:
+                await ws.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            hub.disconnect(ws)
+
+    app.include_router(router)

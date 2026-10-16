@@ -25,9 +25,9 @@
   const REFERENCE_SESSION_ID = 1;             // sesi acuan PDF (01-01-2026 07:00:00)
   const NUMPAD_MAX_DIGITS = 5;
   const FIELD_META = {
-    target:      { title: 'Quantity Target',  unit: 'pcs', isTime: false, min: 1, max: 9999 },
-    cycle_time:  { title: 'Ideal Cycle Time', unit: 's',   isTime: false, min: 1, max: 9999 },
-    run_seconds: { title: 'Production Time',  unit: 's',   isTime: true,  min: 0, max: 864000 },
+    target:          { title: 'Quantity Target',  unit: 'pcs', isTime: false, min: 1, max: 9999 },
+    cycle_time:      { title: 'Ideal Cycle Time', unit: 's',   isTime: false, min: 1, max: 9999 },
+    planned_seconds: { title: 'Production Time',  unit: 's',   isTime: true,  min: 0, max: 864000 },
   };
 
   // ------------------------------------------------------------------
@@ -42,6 +42,7 @@
     numpad: null,            // { line, field, value, fresh }
     devOpen: false,
     devCurrent: null,
+    recoveryHandled: false,
   };
 
   // ------------------------------------------------------------------
@@ -93,11 +94,43 @@
   const post = (path, body) => api(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined });
   const put = (path, body) => api(path, { method: 'PUT', body: JSON.stringify(body) });
 
+  function checkRecovery(snap) {
+    if (snap.recovery_pending && snap.recovery_session && !ui.recoveryHandled) {
+      const rec = snap.recovery_session;
+      setText($('rec-started'), rec.started_at ? rec.started_at.replace('T', ' ') : '-');
+      setText($('rec-duration'), fmtDuration(rec.elapsed_sec || 0));
+      setText($('rec-l1-good'), rec.l1_good || 0);
+      setText($('rec-l1-reject'), rec.l1_reject || 0);
+      setText($('rec-l2-good'), rec.l2_good || 0);
+      setText($('rec-l2-reject'), rec.l2_reject || 0);
+      $('recovery-overlay').classList.remove('hidden');
+    } else {
+      $('recovery-overlay').classList.add('hidden');
+    }
+    if ($('dev-hw-status')) {
+      setText($('dev-hw-status'), snap.is_online ? 'ONLINE (Data Ingested)' : 'OFFLINE (No Data)');
+    }
+  }
+
+  async function handleRecovery(action) {
+    ui.recoveryHandled = true;
+    $('recovery-overlay').classList.add('hidden');
+    try {
+      const res = await post('/api/session/recovery', { action });
+      applyLive(res);
+      toast(action === 'resume' ? 'Sesi dilanjutkan' : 'Sesi sebelumnya diakhiri', 'success');
+      if (action === 'end') loadSessions();
+    } catch (e) {
+      toast(`Gagal memproses sesi: ${e.message}`, 'error');
+    }
+  }
+
   function applyLive(snapshot) {
     if (!snapshot || !Array.isArray(snapshot.lines)) return;
     ui.live = snapshot;
     renderDashboard();
     renderSetting();
+    checkRecovery(snapshot);
   }
 
   // ------------------------------------------------------------------
@@ -387,7 +420,7 @@
       const line = findLine(ui.live, id);
       setText($(`val-target-${id}`), line ? String(line.target) : '-');
       setText($(`val-cycle-${id}`), line ? String(line.cycle_time) : '-');
-      setText($(`val-runtime-${id}`), fmtDuration(line ? line.run_seconds : 0));
+      setText($(`val-runtime-${id}`), fmtDuration(line ? (line.planned_seconds ?? 0) : 0));
     });
   }
 
@@ -415,7 +448,7 @@
       } else if (field === 'cycle_time') {
         const txt = $(`val-cycle-${line}`)?.textContent;
         rawVal = parseInt(txt, 10) || 60;
-      } else if (field === 'run_seconds') {
+      } else if (field === 'planned_seconds' || field === 'run_seconds') {
         const txt = $(`val-runtime-${line}`)?.textContent;
         rawVal = parseDurationSec(txt);
       } else {
@@ -592,78 +625,11 @@
   }
 
   // ------------------------------------------------------------------
-  // Dev State Switcher (10 tampilan visual PDF)
+  // System Info & Display Modal
   // ------------------------------------------------------------------
-  const DEV_STATES = [
-    { n: 1,  label: 'Both Running',          color: 'c-green', run: () => devScenario('both_running') },
-    { n: 2,  label: 'L1 Running · L2 Stop',  color: 'c-mixed', run: () => devScenario('line2_stop') },
-    { n: 3,  label: 'Both Stop',             color: 'c-red',   run: () => devScenario('both_stop') },
-    { n: 4,  label: 'Offline · Idle',        color: 'c-blue',  run: () => devScenario('idle_offline') },
-    { n: 5,  label: 'Start Session 0.0%',    color: 'c-green', run: () => devScenario('start_session') },
-    { n: 6,  label: 'Report · No Session',   color: '',        run: () => devReport(false, 'summary', 0) },
-    { n: 7,  label: 'Report · Session Picked', color: '',      run: () => devReport(true, 'summary', 0) },
-    { n: 8,  label: 'Detail · Product',      color: '',        run: () => devReport(true, 'detail', 0) },
-    { n: 9,  label: 'Detail · A / P / Q',    color: '',        run: () => devReport(true, 'detail', 1) },
-    { n: 10, label: 'System Setting',        color: '',        run: () => showScreen('setting') },
-  ];
-
-  function buildDevPanel() {
-    const grid = $('dev-grid');
-    DEV_STATES.forEach((st) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'dev-btn';
-      b.id = `dev-state-${st.n}`;
-      b.dataset.state = String(st.n);
-      const num = document.createElement('span');
-      num.className = `dev-num ${st.color}`.trim();
-      num.textContent = String(st.n);
-      const label = document.createElement('span');
-      label.textContent = st.label;
-      b.append(num, label);
-      grid.appendChild(b);
-    });
-  }
-
   function toggleDev(force) {
     ui.devOpen = typeof force === 'boolean' ? force : !ui.devOpen;
     $('dev-overlay').classList.toggle('hidden', !ui.devOpen);
-  }
-
-  function runDevState(n) {
-    const st = DEV_STATES.find((s) => s.n === n);
-    if (!st) return;
-    ui.devCurrent = n;
-    $$('.dev-btn[data-state]').forEach((b) => b.classList.toggle('current', Number(b.dataset.state) === n));
-    toggleDev(false);
-    st.run();
-  }
-
-  async function devScenario(name) {
-    showScreen('dashboard');
-    try {
-      applyLive(await post('/api/mock/toggle-state', { scenario: name }));
-    } catch (_) {
-      toast('Backend offline — run backend/mock_server.py', 'error');
-    }
-  }
-
-  async function devReport(pick, view, page) {
-    showScreen('report');
-    if (pick && !ui.report.sessions.length) await loadSessions();
-    const ref = ui.report.sessions.find((s) => s.id === REFERENCE_SESSION_ID) || ui.report.sessions[0];
-    ui.report.selectedId = pick && ref ? ref.id : null;
-    ui.report.view = ui.report.selectedId != null ? view : 'summary';
-    ui.report.page = page;
-    renderReport();
-  }
-
-  async function devToggle(body) {
-    try {
-      applyLive(await post('/api/mock/toggle-state', body));
-    } catch (_) {
-      toast('Backend offline — run backend/mock_server.py', 'error');
-    }
   }
 
   // ------------------------------------------------------------------
@@ -726,24 +692,15 @@
       if (e.target.id === 'numpad-overlay') closeNumpad();   // tap di luar modal = batal
     });
 
-    // Dev panel
-    $('dev-grid').addEventListener('click', (e) => {
-      const b = e.target.closest('.dev-btn[data-state]');
-      if (b) runDevState(Number(b.dataset.state));
-    });
+    // Recovery Modal buttons
+    $('btn-recovery-resume').addEventListener('click', () => handleRecovery('resume'));
+    $('btn-recovery-end').addEventListener('click', () => handleRecovery('end'));
+
+    // Dev / System info panel
     $('dev-close').addEventListener('click', () => toggleDev(false));
     $('dev-overlay').addEventListener('pointerdown', (e) => {
       if (e.target.id === 'dev-overlay') toggleDev(false);
     });
-    $('dev-conn').addEventListener('click', () => {
-      devToggle({ connection: ui.live && ui.live.is_online ? 'OFFLINE' : 'ONLINE' });
-    });
-    LINES.forEach((id) => $(`dev-line-${id}`).addEventListener('click', () => {
-      const cur = findLine(ui.live, id)?.status || 'IDLE';
-      const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(cur) + 1) % STATUS_CYCLE.length];
-      devToggle({ line_id: id, status: next });
-    }));
-
     $('dev-fullscreen').addEventListener('click', toggleFullscreen);
 
     // Double-click judul layar = toggle fullscreen
@@ -830,7 +787,6 @@
     window.addEventListener('resize', updateLayoutScale);
     window.addEventListener('orientationchange', updateLayoutScale);
     document.addEventListener('fullscreenchange', updateLayoutScale);
-    buildDevPanel();
     bindEvents();
     renderDashboard();
     renderSetting();
