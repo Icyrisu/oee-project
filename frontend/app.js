@@ -255,13 +255,14 @@
     LINES.forEach((id) => {
       const line = findLine(d, id);
       const status = linked && line ? line.status : 'IDLE';
-      const temp = line ? fmt1(line.temp_c) : '--.-';
+      const hasTemp = online && line && line.temp_c != null;
+      const tempText = hasTemp ? `${fmt1(line.temp_c)} °C` : '--.- °C';
 
       const card = $(`card-status-${id}`);
       const cls = `status-card ${STATUS_CLASS[status] || 'is-idle'}`;
       if (card.className !== cls) card.className = cls;
 
-      setText($(`status-text-${id}`), `${STATUS_LABEL[status] || 'Idle'} - ${temp} °C`);
+      setText($(`status-text-${id}`), `${STATUS_LABEL[status] || 'Idle'} - ${tempText}`);
 
       const oee = active && line ? clamp(Number(line.oee) || 0, 0, 100) : 0;
       setText($(`oee-value-${id}`), `${fmt1(oee)}%`);

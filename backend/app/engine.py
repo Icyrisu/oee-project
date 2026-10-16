@@ -30,11 +30,11 @@ class Engine:
         self._last_checkpoint_sec: int = 0
 
         self.lines: Dict[int, dict] = {
-            1: self._new_line(target=10, cycle_time=60.0, planned_seconds=0, temp_c=30.0),
-            2: self._new_line(target=30, cycle_time=60.0, planned_seconds=0, temp_c=30.0),
+            1: self._new_line(target=10, cycle_time=60.0, planned_seconds=0, temp_c=None),
+            2: self._new_line(target=30, cycle_time=60.0, planned_seconds=0, temp_c=None),
         }
 
-    def _new_line(self, target: int, cycle_time: float, planned_seconds: int, temp_c: float) -> dict:
+    def _new_line(self, target: int, cycle_time: float, planned_seconds: int, temp_c: Optional[float] = None) -> dict:
         return {
             "status": "IDLE",
             "temp_c": temp_c,
