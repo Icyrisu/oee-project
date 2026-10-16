@@ -614,9 +614,21 @@
     setText($('btn-poweroff-confirm'), 'SHUTTING DOWN...');
 
     try {
-      await api('/api/system/poweroff', { method: 'POST' });
-    } catch (_) {
-      // Normal if network drops during OS shutdown
+      const res = await api('/api/system/poweroff', { method: 'POST' });
+      if (!res || res.status !== 'ok') {
+        throw new Error(res?.message || 'Server returned invalid response');
+      }
+    } catch (err) {
+      const msg = err?.message || String(err);
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+        return; // Expected if network interface disconnects during shutdown
+      }
+      toast(`Power off failed: ${msg}`, 'error');
+      $('btn-poweroff-cancel').disabled = false;
+      $('btn-poweroff-confirm').disabled = false;
+      setText($('poweroff-title'), 'Power Off Failed');
+      setText($('poweroff-desc'), `Could not shut down: ${msg}. Please ensure backend service is updated and restarted.`);
+      setText($('btn-poweroff-confirm'), 'RETRY');
     }
   }
 

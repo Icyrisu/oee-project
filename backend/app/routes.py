@@ -86,6 +86,7 @@ def register_routes(app, engine):
     @router.post("/api/system/poweroff")
     async def system_poweroff():
         import os
+        import subprocess
         import sys
         import threading
         import time
@@ -94,9 +95,22 @@ def register_routes(app, engine):
             engine._save_checkpoint()
 
         def _do_shutdown():
-            time.sleep(0.8)
+            time.sleep(0.3)
             if sys.platform.startswith("linux"):
-                os.system("sudo poweroff")
+                commands = [
+                    ["sudo", "/sbin/shutdown", "-h", "now"],
+                    ["sudo", "shutdown", "-h", "now"],
+                    ["sudo", "/bin/systemctl", "poweroff"],
+                    ["sudo", "systemctl", "poweroff"],
+                    ["sudo", "poweroff"],
+                ]
+                for cmd in commands:
+                    try:
+                        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                        if res.returncode == 0:
+                            break
+                    except Exception:
+                        pass
             else:
                 print("[SYSTEM] Simulated poweroff triggered")
 
