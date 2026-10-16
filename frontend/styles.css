@@ -106,19 +106,16 @@ button:focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
   display: grid;
   place-items: center;
   color: var(--white);
-  background: #18181A;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  background: transparent;
+  border: none;
+  transition: background-color .15s ease, color .15s ease, opacity .15s ease;
 }
-.nav-btn svg { width: 22px; height: 22px; }
+.nav-btn svg { width: 24px; height: 24px; }
 .nav-btn.active {
   background: var(--white);
   color: var(--black);
-  border-color: var(--white);
-  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.25);
 }
-.nav-btn:active { opacity: .8; }
+.nav-btn:active { opacity: .75; }
 
 /* =====================================================================
    AREA KONTEN & SCREEN
@@ -670,10 +667,10 @@ button.pill:disabled { opacity: .55; }
 .info-steps-card {
   flex: 1;
   min-height: 0;
-  background: #141414;
-  border: 1px solid rgba(255, 255, 255, .1);
+  background: var(--black);
+  border: none;
   border-radius: var(--radius-lg);
-  padding: 8px 12px;
+  padding: 6px 6px;
   display: flex;
   flex-direction: column;
   justify-content: center;
