@@ -118,3 +118,13 @@ def test_api_session_lifecycle(client):
     # 7. Check sessions list is now empty
     res_sessions_after = client.get("/api/sessions")
     assert len(res_sessions_after.json()["sessions"]) == 0
+
+
+def test_api_network(client):
+    res = client.get("/api/network")
+    assert res.status_code == 200
+    data = res.json()
+    assert "hotspot_ip" in data
+    assert "hostname" in data
+    assert "lan_ip" in data
+

@@ -198,11 +198,27 @@
     if (name === 'info') renderInfo();
   }
 
-  function renderInfo() {
+  async function renderInfo() {
     const cur = $('info-current-url');
-    if (cur && location.hostname) {
-      const port = location.port ? `:${location.port}` : '';
-      if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1' && location.hostname !== '10.42.0.1') {
+    const hs = $('info-hotspot-url');
+
+    try {
+      const net = await api('/api/network');
+      if (cur) {
+        if (net.lan_ip) {
+          cur.textContent = `http://${net.lan_ip}:8000`;
+          cur.className = 'info-val badge-green';
+        } else {
+          cur.textContent = 'Disconnected';
+          cur.className = 'info-val badge-dark';
+        }
+      }
+      if (hs && net.hotspot_ip) {
+        hs.textContent = `http://${net.hotspot_ip}:8000`;
+      }
+    } catch (_) {
+      if (cur && location.hostname && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1' && location.hostname !== '10.42.0.1') {
+        const port = location.port ? `:${location.port}` : '';
         cur.textContent = `http://${location.hostname}${port}`;
       }
     }

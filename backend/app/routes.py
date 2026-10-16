@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from .hub import hub
+from .network import get_network_info
 from .repository import delete_session, get_all_sessions
 from .schemas import IngestPayload, RecoveryAction, SettingsUpdate
 
@@ -13,6 +14,10 @@ def register_routes(app, engine):
             "is_online": engine.is_online,
             "session_active": engine.session_active,
         }
+
+    @router.get("/api/network")
+    async def get_network():
+        return get_network_info()
 
     @router.get("/api/state")
     async def get_state():
