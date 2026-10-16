@@ -72,18 +72,36 @@ def test_api_settings_update(client):
 
 
 def test_api_session_lifecycle(client):
-    # Start session
+    # 1. Starting session while offline must return HTTP 400
+    res_offline = client.post("/api/session/toggle")
+    assert res_offline.status_code == 400
+    assert "offline" in res_offline.json()["detail"].lower()
+
+    # 2. Make machine online via ingest
+    client.post("/api/ingest", json={"ts_ms": 1000, "esp32_connected": True})
+
+    # 3. Start session while online succeeds
     res_start = client.post("/api/session/toggle")
     assert res_start.status_code == 200
     assert res_start.json()["session_active"] is True
 
-    # Stop session
+    # 4. Stop session
     res_stop = client.post("/api/session/toggle")
     assert res_stop.status_code == 200
     assert res_stop.json()["session_active"] is False
 
-    # Check sessions list
+    # 5. Check sessions list
     res_sessions = client.get("/api/sessions")
     assert res_sessions.status_code == 200
-    assert "sessions" in res_sessions.json()
-    assert len(res_sessions.json()["sessions"]) == 1
+    sessions = res_sessions.json()["sessions"]
+    assert len(sessions) == 1
+    session_id = sessions[0]["id"]
+
+    # 6. Delete session
+    res_del = client.delete(f"/api/sessions/{session_id}")
+    assert res_del.status_code == 200
+    assert res_del.json()["status"] == "ok"
+
+    # 7. Check sessions list is now empty
+    res_sessions_after = client.get("/api/sessions")
+    assert len(res_sessions_after.json()["sessions"]) == 0

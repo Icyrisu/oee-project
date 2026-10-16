@@ -255,3 +255,12 @@ def log_state_change(
             """,
             (session_id, line_id, state, temp_c, timestamp),
         )
+
+
+def delete_session(conn: sqlite3.Connection, session_id: int) -> bool:
+    """Deletes a session and its associated state logs from SQLite."""
+    cur = conn.cursor()
+    with conn:
+        cur.execute("DELETE FROM state_logs WHERE session_id = ?", (session_id,))
+        cur.execute("DELETE FROM production_sessions WHERE id = ?", (session_id,))
+        return cur.rowcount > 0

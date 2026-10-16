@@ -392,11 +392,14 @@ button.pill:disabled { opacity: .55; }
 .row-value-sm { font-size: 18px; }
 
 .pager {
-  flex: 0 0 18px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   gap: 8px;
+  height: 14px;
+  margin-top: -2px;
+  margin-bottom: 6px;
+  flex-shrink: 0;
 }
 .dot {
   position: relative;
@@ -405,9 +408,43 @@ button.pill:disabled { opacity: .55; }
   border-radius: 4px;
   background: rgba(255, 255, 255, .35);
   transition: width .25s var(--ease), background-color .25s;
+  cursor: pointer;
+  border: none;
+  padding: 0;
 }
-.dot::after { content: ""; position: absolute; inset: -12px -8px -4px; }
+.dot::after { content: ""; position: absolute; inset: -8px -6px; }
 .dot.active { width: 22px; background: var(--white); }
+
+/* ----- Detail Charts (Page 2) ----- */
+.detail-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+.chart-card {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.chart-card .card-title {
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 2px;
+  line-height: 1;
+}
+.chart-box {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 130px;
+}
+.chart-box canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
 
 /* ----- Session Dropdown ----- */
 .session-list {

@@ -4,6 +4,9 @@
    - Real-time live data via WebSocket /ws from FastAPI backend
    - Touch Virtual Numpad for Settings
    - Production session lifecycle with End Session confirmation modal
+   - Delete Session with confirmation modal
+   - 3-Page Report Detail (Counts, OEE Metrics, Chart.js Visuals)
+   - Offline Excel (.xlsx) detailed export with SheetJS
    - Interrupted session recovery modal
    ===================================================================== */
 (() => {
@@ -42,6 +45,9 @@
     devOpen: false,
     recoveryHandled: false,
   };
+
+  let chartL1 = null;
+  let chartL2 = null;
 
   // ------------------------------------------------------------------
   // Helpers
@@ -201,11 +207,17 @@
     const active = linked && d.session_active;
 
     // Session pill: END (red) when active, START (blue) when idle
+    // Validation: Cannot START when machine is offline
     const btn = $('btn-session-toggle');
     setText(btn, active ? 'END' : 'START');
     btn.classList.toggle('pill-red', active);
     btn.classList.toggle('pill-blue', !active);
-    btn.disabled = !linked || ui.sessionBusy;
+    btn.disabled = !linked || ui.sessionBusy || (!active && !online);
+    if (!active && !online) {
+      btn.title = 'Cannot start session while machine is offline';
+    } else {
+      btn.title = '';
+    }
 
     // Connection pill
     const conn = $('badge-connection');
@@ -236,6 +248,10 @@
 
   function onSessionToggleClick() {
     if (ui.sessionBusy || !ui.live) return;
+    if (!ui.live.session_active && !ui.live.is_online) {
+      toast('Cannot start session while machine is offline', 'error');
+      return;
+    }
     if (ui.live.session_active) {
       // Require confirmation before ending active session
       openEndConfirmation();
@@ -261,8 +277,8 @@
       const active = ui.live.session_active;
       toast(active ? 'Session started' : 'Session ended & saved', 'success');
       if (!active) ui.report.sessions = [];   // force refresh session list
-    } catch (_) {
-      toast('Backend offline', 'error');
+    } catch (e) {
+      toast(e.message || 'Backend error', 'error');
     } finally {
       ui.sessionBusy = false;
       renderDashboard();
@@ -294,6 +310,8 @@
 
     setText($('session-label'), s ? s.label : 'Select Session Data');
     $('btn-report-back').classList.toggle('hidden', !detail);
+    $('btn-report-delete').classList.toggle('hidden', !s || !detail);
+    $('report-pager').classList.toggle('hidden', !detail);
     $('report-actions').classList.toggle('hidden', detail);
     $('report-summary').classList.toggle('hidden', detail);
     $('report-detail').classList.toggle('hidden', !detail);
@@ -312,35 +330,116 @@
 
   function renderDetail(s) {
     const page = ui.report.page;
-    LINES.forEach((id) => {
-      const ln = findLine(s, id) || {};
-      const rows = page === 0
-        ? [
-            [`OEE Line ${id}`, `${fmt1(ln.oee)}%`, 'text-blue'],
-            ['Good Product', String(ln.good ?? 0), 'text-blue'],
-            ['Reject Product', String(ln.reject ?? 0), 'text-red'],
-          ]
-        : [
-            [`Availability Line ${id}`, `${fmt1(ln.availability)}%`, 'text-blue'],
-            [`Performance Line ${id}`, `${fmt1(ln.performance)}%`, 'text-blue'],
-            [`Quality Line ${id}`, `${fmt1(ln.quality)}%`, 'text-blue'],
-          ];
-      rows.forEach(([label, value, cls], i) => {
-        setText($(`d${id}-l${i}`), label);
-        const v = $(`d${id}-v${i}`);
-        setText(v, value);
-        v.className = `row-value ${cls}`;
+    const showCharts = page === 2;
+
+    $('detail-cards').classList.toggle('hidden', showCharts);
+    $('detail-charts').classList.toggle('hidden', !showCharts);
+
+    if (showCharts) {
+      renderCharts(s);
+    } else {
+      LINES.forEach((id) => {
+        const ln = findLine(s, id) || {};
+        const rows = page === 0
+          ? [
+              [`OEE Line ${id}`, `${fmt1(ln.oee)}%`, 'text-blue'],
+              ['Good Product', String(ln.good ?? 0), 'text-blue'],
+              ['Reject Product', String(ln.reject ?? 0), 'text-red'],
+            ]
+          : [
+              [`Availability Line ${id}`, `${fmt1(ln.availability)}%`, 'text-blue'],
+              [`Performance Line ${id}`, `${fmt1(ln.performance)}%`, 'text-blue'],
+              [`Quality Line ${id}`, `${fmt1(ln.quality)}%`, 'text-blue'],
+            ];
+        rows.forEach(([label, value, cls], i) => {
+          setText($(`d${id}-l${i}`), label);
+          const v = $(`d${id}-v${i}`);
+          setText(v, value);
+          v.className = `row-value ${cls}`;
+        });
       });
-    });
-    $$('.pager .dot').forEach((dot) => {
+    }
+
+    $$('#report-pager .dot').forEach((dot) => {
       const on = Number(dot.dataset.page) === page;
       dot.classList.toggle('active', on);
       dot.setAttribute('aria-selected', String(on));
     });
   }
 
+  function renderCharts(s) {
+    if (typeof Chart === 'undefined') return;
+    const l1 = findLine(s, 1) || {};
+    const l2 = findLine(s, 2) || {};
+    chartL1 = createOrUpdateChart(chartL1, 'chart-line-1', l1);
+    chartL2 = createOrUpdateChart(chartL2, 'chart-line-2', l2);
+  }
+
+  function createOrUpdateChart(chartInst, canvasId, line) {
+    const canvas = $(canvasId);
+    if (!canvas) return null;
+    const data = [
+      clamp(Number(line.availability) || 0, 0, 100),
+      clamp(Number(line.performance) || 0, 0, 100),
+      clamp(Number(line.quality) || 0, 0, 100),
+      clamp(Number(line.oee) || 0, 0, 100),
+    ];
+    if (chartInst) {
+      chartInst.data.datasets[0].data = data;
+      chartInst.update();
+      return chartInst;
+    }
+    const ctx = canvas.getContext('2d');
+    return new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Avail', 'Perf', 'Qual', 'OEE'],
+        datasets: [{
+          data,
+          backgroundColor: ['#5279FD', '#A3F268', '#FFB800', '#9B51E0'],
+          borderRadius: 4,
+          barThickness: 11,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 250 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ` ${ctx.raw.toFixed(1)}%`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            min: 0,
+            max: 100,
+            ticks: {
+              stepSize: 25,
+              callback: (val) => `${val}%`,
+              font: { size: 9, family: 'Poppins' },
+              color: '#666',
+            },
+            grid: { color: 'rgba(0,0,0,0.06)' },
+          },
+          y: {
+            ticks: {
+              font: { size: 10, weight: '600', family: 'Poppins' },
+              color: '#000',
+            },
+            grid: { display: false },
+          },
+        },
+      },
+    });
+  }
+
   function setDetailPage(page) {
-    const p = clamp(page, 0, 1);
+    const p = clamp(page, 0, 2);
     if (p === ui.report.page) return;
     ui.report.page = p;
     renderReport();
@@ -404,7 +503,103 @@
     return null;
   }
 
+  // ------------------------------------------------------------------
+  // Session Deletion
+  // ------------------------------------------------------------------
+  function openDeleteConfirmation() {
+    const s = selectedSession();
+    if (!s) return;
+    setText($('delete-session-label'), s.label || `#${s.id}`);
+    $('delete-overlay').classList.remove('hidden');
+  }
+
+  function closeDeleteConfirmation() {
+    $('delete-overlay').classList.add('hidden');
+  }
+
+  async function executeDeleteSession() {
+    const s = selectedSession();
+    if (!s) return;
+    closeDeleteConfirmation();
+    try {
+      await api(`/api/sessions/${s.id}`, { method: 'DELETE' });
+      toast('Session deleted successfully', 'success');
+      ui.report.selectedId = null;
+      ui.report.view = 'summary';
+      await loadSessions();
+    } catch (e) {
+      toast(`Failed to delete session: ${e.message}`, 'error');
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Excel Export (.xlsx)
+  // ------------------------------------------------------------------
   function exportSession(s) {
+    const l1 = findLine(s, 1) || {};
+    const l2 = findLine(s, 2) || {};
+    const totalGood = (l1.good || 0) + (l2.good || 0);
+    const totalReject = (l1.reject || 0) + (l2.reject || 0);
+    const totalProd = totalGood + totalReject;
+    const avgOee = fmt1(((Number(l1.oee) || 0) + (Number(l2.oee) || 0)) / 2);
+    const cleanLabel = (s.label || 'session').replace(/[^0-9A-Za-z]+/g, '-');
+
+    if (typeof XLSX !== 'undefined') {
+      try {
+        const wsData = [
+          ['OEE PRODUCTION REPORT — SUMMARY & DETAILS'],
+          [],
+          ['SESSION INFORMATION'],
+          ['Session ID', s.id],
+          ['Session Label', s.label || '-'],
+          ['Start Time', s.started_at ? s.started_at.replace('T', ' ') : '-'],
+          ['End Time', s.ended_at ? s.ended_at.replace('T', ' ') : '-'],
+          ['Total Elapsed Duration', fmtDuration(s.elapsed_sec || 0)],
+          ['Exported At', new Date().toLocaleString()],
+          [],
+          ['PRODUCTION LINE COMPARISON'],
+          [
+            'Line Name', 'Target (pcs)', 'Good (pcs)', 'Reject (pcs)', 'Total (pcs)',
+            'Ideal Cycle Time (s)', 'Planned Time', 'Actual Run Time', 'Downtime',
+            'Availability (%)', 'Performance (%)', 'Quality (%)', 'Overall OEE (%)'
+          ],
+          [
+            'Line 1', l1.target ?? '-', l1.good ?? 0, l1.reject ?? 0, (l1.good ?? 0) + (l1.reject ?? 0),
+            l1.cycle_time ?? '-', fmtDuration(l1.planned_seconds ?? 0), fmtDuration(l1.run_seconds ?? 0),
+            fmtDuration(Math.max(0, (s.elapsed_sec || 0) - (l1.run_seconds || 0))),
+            `${fmt1(l1.availability)}%`, `${fmt1(l1.performance)}%`, `${fmt1(l1.quality)}%`, `${fmt1(l1.oee)}%`
+          ],
+          [
+            'Line 2', l2.target ?? '-', l2.good ?? 0, l2.reject ?? 0, (l2.good ?? 0) + (l2.reject ?? 0),
+            l2.cycle_time ?? '-', fmtDuration(l2.planned_seconds ?? 0), fmtDuration(l2.run_seconds ?? 0),
+            fmtDuration(Math.max(0, (s.elapsed_sec || 0) - (l2.run_seconds || 0))),
+            `${fmt1(l2.availability)}%`, `${fmt1(l2.performance)}%`, `${fmt1(l2.quality)}%`, `${fmt1(l2.oee)}%`
+          ],
+          [],
+          ['PLANT TOTALS & AVERAGES'],
+          ['Total Good Products', `${totalGood} pcs`],
+          ['Total Reject Products', `${totalReject} pcs`],
+          ['Overall Quality Rate', `${totalProd > 0 ? fmt1((totalGood / totalProd) * 100) : 0}%`],
+          ['Plant Average OEE', `${avgOee}%`],
+        ];
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [
+          { wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+          { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 16 },
+          { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 18 }
+        ];
+        XLSX.utils.book_append_sheet(wb, ws, 'OEE Report');
+        XLSX.writeFile(wb, `OEE_${cleanLabel}.xlsx`);
+        toast('Session data exported (Excel .xlsx)', 'success');
+        return;
+      } catch (err) {
+        console.warn('XLSX export failed, falling back to CSV', err);
+      }
+    }
+
+    // Fallback CSV
     const rows = [
       ['Session', s.label],
       ['Started', s.started_at || ''],
@@ -420,12 +615,12 @@
     const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `OEE_${s.label.replace(/[^0-9A-Za-z]+/g, '-')}.csv`;
+    a.download = `OEE_${cleanLabel}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast('Session data exported (CSV)', 'success');
+    toast('Session data exported', 'success');
   }
 
   // ------------------------------------------------------------------
@@ -668,6 +863,14 @@
       if (e.target.id === 'confirm-overlay') closeEndConfirmation();
     });
 
+    // Delete Session Confirmation Modal
+    $('btn-report-delete').addEventListener('click', openDeleteConfirmation);
+    $('btn-delete-cancel').addEventListener('click', closeDeleteConfirmation);
+    $('btn-delete-confirm').addEventListener('click', executeDeleteSession);
+    $('delete-overlay').addEventListener('pointerdown', (e) => {
+      if (e.target.id === 'delete-overlay') closeDeleteConfirmation();
+    });
+
     // Report
     $('btn-session-select').addEventListener('click', () => (ui.report.listOpen ? closeSessionList() : openSessionList()));
     $('session-items').addEventListener('click', (e) => {
@@ -690,11 +893,18 @@
       ui.report.view = 'summary';
       renderReport();
     });
-    $$('.pager .dot').forEach((dot) => dot.addEventListener('click', () => setDetailPage(Number(dot.dataset.page))));
 
-    // Detail: tap card to toggle page (Product <-> Avi/Per/Qu)
+    // Pager dots directly under session select bar
+    $$('#report-pager .dot').forEach((dot) => {
+      dot.addEventListener('click', () => setDetailPage(Number(dot.dataset.page)));
+    });
+
+    // Detail: tap card or charts to cycle through pages 0 -> 1 -> 2 -> 0
     $('detail-cards').addEventListener('click', () => {
-      setDetailPage(ui.report.page === 0 ? 1 : 0);
+      setDetailPage((ui.report.page + 1) % 3);
+    });
+    $('detail-charts').addEventListener('click', () => {
+      setDetailPage((ui.report.page + 1) % 3);
     });
 
     // Setting → Touch Virtual Numpad
@@ -763,6 +973,7 @@
       if (e.key === 'd' || e.key === 'D') { toggleDev(); return; }
       if (e.key === 'Escape') {
         closeEndConfirmation();
+        closeDeleteConfirmation();
         toggleDev(false);
         closeSessionList();
         return;

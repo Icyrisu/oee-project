@@ -78,10 +78,21 @@ def test_engine_ingest_and_session_lifecycle():
     assert rows[0]["l1_run_sec"] == 10
 
 
+def test_engine_start_session_offline_rejected():
+    import pytest
+    conn = init_db(":memory:")
+    engine = Engine(conn)
+    engine.startup()
+    assert engine.is_online is False
+    with pytest.raises(ValueError, match="Cannot start session while machine is offline"):
+        engine.start_session()
+
+
 def test_engine_emergency_stop():
     conn = init_db(":memory:")
     engine = Engine(conn)
     engine.startup()
+    engine.is_online = True
     engine.start_session()
 
     # Hardware sends EMG = True
@@ -100,6 +111,7 @@ def test_engine_interrupted_session_recovery():
     conn = init_db(":memory:")
     engine1 = Engine(conn)
     engine1.startup()
+    engine1.is_online = True
     engine1.start_session()
 
     engine1.ingest(

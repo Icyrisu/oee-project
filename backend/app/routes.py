@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from .hub import hub
-from .repository import get_all_sessions
+from .repository import delete_session, get_all_sessions
 from .schemas import IngestPayload, RecoveryAction, SettingsUpdate
 
 def register_routes(app, engine):
@@ -25,7 +25,10 @@ def register_routes(app, engine):
 
     @router.post("/api/session/toggle")
     async def toggle_session():
-        snap = engine.toggle_session()
+        try:
+            snap = engine.toggle_session()
+        except ValueError as err:
+            raise HTTPException(status_code=400, detail=str(err))
         await hub.broadcast(snap)
         return snap
 
@@ -39,6 +42,15 @@ def register_routes(app, engine):
     async def get_sessions():
         sessions = get_all_sessions(engine.conn)
         return {"sessions": sessions}
+
+    @router.delete("/api/sessions/{session_id}")
+    async def remove_session(session_id: int):
+        if engine.session_active and engine.session_id == session_id:
+            raise HTTPException(status_code=400, detail="Cannot delete currently active session")
+        ok = delete_session(engine.conn, session_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return {"status": "ok", "deleted_id": session_id}
 
     @router.put("/api/settings/{line_id}")
     async def update_settings(line_id: int, body: SettingsUpdate):

@@ -214,7 +214,9 @@ class Engine:
         )
 
     def start_session(self) -> None:
-        """Memulai sesi produksi baru."""
+        """Starts a new production session."""
+        if not self.is_online:
+            raise ValueError("Cannot start session while machine is offline")
         self.session_seconds = 0
         self._last_checkpoint_sec = 0
         self.session_active = True

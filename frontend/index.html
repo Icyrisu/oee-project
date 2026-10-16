@@ -10,6 +10,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,600;0,700;0,800;1,400;1,700;1,800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="vendor/xlsx.mini.min.js"></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -104,13 +106,23 @@
       <section class="screen" id="screen-report" data-screen="report" aria-labelledby="title-report">
         <header class="screen-header">
           <h2 class="title" id="title-report"><b>OEE</b> <i>Report</i></h2>
-          <button type="button" class="pill pill-blue hidden" id="btn-report-back">BACK</button>
+          <div class="header-actions">
+            <button type="button" class="pill pill-red hidden" id="btn-report-delete">DELETE</button>
+            <button type="button" class="pill pill-blue hidden" id="btn-report-back">BACK</button>
+          </div>
         </header>
 
         <button type="button" class="session-bar" id="btn-session-select" aria-haspopup="listbox" aria-expanded="false">
           <span class="session-bar-text" id="session-label">Select Session Data</span>
           <svg class="icon-20"><use href="#i-search"/></svg>
         </button>
+
+        <!-- Pager dots positioned directly below session bar -->
+        <div class="pager hidden" id="report-pager" role="tablist" aria-label="Detail page">
+          <button type="button" class="dot active" id="detail-dot-0" data-page="0" aria-label="Production counts"></button>
+          <button type="button" class="dot" id="detail-dot-1" data-page="1" aria-label="OEE metrics"></button>
+          <button type="button" class="dot" id="detail-dot-2" data-page="2" aria-label="Performance charts"></button>
+        </div>
 
         <div class="report-actions" id="report-actions">
           <button type="button" class="btn-blue" id="btn-detail">Detail Data</button>
@@ -155,9 +167,21 @@
               <div class="detail-row"><span class="row-label" id="d2-l2">Reject Product</span><span class="row-value text-red" id="d2-v2">0</span></div>
             </article>
           </div>
-          <div class="pager" role="tablist" aria-label="Detail page">
-            <button type="button" class="dot active" id="detail-dot-0" data-page="0" aria-label="Product data"></button>
-            <button type="button" class="dot" id="detail-dot-1" data-page="1" aria-label="Availability, Performance, Quality"></button>
+
+          <!-- Page 2: Production Charts -->
+          <div class="detail-charts hidden" id="detail-charts">
+            <article class="white-card chart-card">
+              <h3 class="card-title">Line 1 — OEE Metrics</h3>
+              <div class="chart-box">
+                <canvas id="chart-line-1"></canvas>
+              </div>
+            </article>
+            <article class="white-card chart-card">
+              <h3 class="card-title">Line 2 — OEE Metrics</h3>
+              <div class="chart-box">
+                <canvas id="chart-line-2"></canvas>
+              </div>
+            </article>
           </div>
         </div>
 
@@ -285,6 +309,18 @@
         <div class="confirm-actions">
           <button type="button" class="key key-cancel confirm-btn" id="btn-confirm-cancel">CANCEL</button>
           <button type="button" class="key key-clear confirm-btn" id="btn-confirm-end">END SESSION</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= DELETE SESSION CONFIRMATION MODAL ================= -->
+    <div class="overlay hidden" id="delete-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+      <div class="confirm-card">
+        <h3 class="confirm-title" id="delete-title">Delete Session Record?</h3>
+        <p class="confirm-desc" id="delete-desc">Are you sure you want to permanently delete session <strong id="delete-session-label">-</strong>? This action cannot be undone.</p>
+        <div class="confirm-actions">
+          <button type="button" class="key key-cancel confirm-btn" id="btn-delete-cancel">CANCEL</button>
+          <button type="button" class="key key-clear confirm-btn" id="btn-delete-confirm">DELETE</button>
         </div>
       </div>
     </div>
